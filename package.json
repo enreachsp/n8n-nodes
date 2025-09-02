@@ -1,0 +1,45 @@
+{
+  "name": "n8n-nodes-enreach",
+  "version": "0.1.2",
+  "description": "n8n community node for Enreach communication services",
+  "keywords": [
+    "n8n-community-node-package"
+  ],
+  "license": "MIT",
+  "homepage": "",
+  "author": {
+    "name": "Marin Pavel",
+    "email": "marin.pavel@enreach.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MarinPEnreach/EnreachNode"
+  },
+  "engines": {
+    "node": ">=20.15"
+  },
+  "main": "index.js",
+  "scripts": {
+    "build": "npx rimraf dist && tsc && gulp build:icons",
+    "dev": "tsc --watch"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [],
+    "nodes": [
+      "dist/nodes/Enreach/Enreach.node.js",
+      "dist/nodes/EnreachTrigger/EnreachTrigger.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "gulp": "^5.0.0",
+    "typescript": "^5.8.2"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}
