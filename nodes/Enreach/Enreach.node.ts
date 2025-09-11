@@ -114,6 +114,11 @@ export class Enreach implements INodeType {
                         value: 'text',
                         description: 'Send a text message',
                     },
+                    {
+                        name: 'Annotation',
+                        value: 'annotation',
+                        description: 'Send an annotation message',
+                    },
                 ],
                 default: 'text',
                 required: true,

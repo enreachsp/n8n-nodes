@@ -37,6 +37,7 @@ export const MESSAGE_TYPES = {
     TEXT: 'text',
     BUTTON: 'button',
     LIST: 'list',
+    ANNOTATION: 'annotation',
 } as const;
 
 // Authentication methods
