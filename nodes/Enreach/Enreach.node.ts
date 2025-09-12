@@ -61,7 +61,7 @@ export class Enreach implements INodeType {
                 name: 'autoDetectionNotice',
                 type: 'notice',
                 default: '',
-                description: '⚠️ JWT and Callback URL are auto-detected from the workflow. They first check the previous node, then look for the specified trigger node. Use the "Trigger Node Name" field below to specify which trigger to connect to.',
+                description: '⚠️ JWT and Callback URL are auto-detected from the workflow. They first check the previous node, then look for "Enreach Trigger" node. For "Send and Wait" operation, you can specify a different trigger node name.',
             },
             
             // Trigger Node Selection
@@ -69,6 +69,11 @@ export class Enreach implements INodeType {
                 displayName: 'Trigger Node Name',
                 name: 'triggerNodeName',
                 type: 'string',
+                displayOptions: {
+                    show: {
+                        operation: ['sendAndWait'],
+                    },
+                },
                 default: 'Enreach Trigger',
                 placeholder: 'Enreach Trigger',
                 description: 'Name of the trigger node to get JWT and callback URL from. You can reference a specific trigger node if you have multiple triggers in your workflow.',

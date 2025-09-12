@@ -255,8 +255,10 @@ async function processMessageCommon(
     const type = executeFunctions.getNodeParameter('type', itemIndex) as string;
     const text = executeFunctions.getNodeParameter('text', itemIndex) as string;
     
-    // Extract trigger node name and validate
-    const triggerNodeName = executeFunctions.getNodeParameter('triggerNodeName', itemIndex, 'Enreach Trigger') as string;
+    // Extract trigger node name and validate (only for sendAndWait)
+    const triggerNodeName = operation === 'sendAndWait' 
+        ? executeFunctions.getNodeParameter('triggerNodeName', itemIndex, 'Enreach Trigger') as string
+        : 'Enreach Trigger';
     
     let callbackUrl: string;
     let jwt: string;
