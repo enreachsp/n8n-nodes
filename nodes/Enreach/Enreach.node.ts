@@ -61,7 +61,19 @@ export class Enreach implements INodeType {
                 name: 'autoDetectionNotice',
                 type: 'notice',
                 default: '',
-                description: '⚠️ JWT and Callback URL are auto-detected from the workflow. They first check the previous node, then look for a node named "Enreach Trigger". If you rename your trigger node, update the hidden field expressions accordingly.',
+                description: '⚠️ JWT and Callback URL are auto-detected from the workflow. They first check the previous node, then look for the specified trigger node. Use the "Trigger Node Name" field below to specify which trigger to connect to.',
+            },
+            
+            // Trigger Node Selection
+            {
+                displayName: 'Trigger Node Name',
+                name: 'triggerNodeName',
+                type: 'string',
+                default: 'Enreach Trigger',
+                placeholder: 'Enreach Trigger',
+                description: 'Name of the trigger node to get JWT and callback URL from. You can reference a specific trigger node if you have multiple triggers in your workflow.',
+                hint: 'Enter the exact name of your Enreach Trigger node',
+                required: false,
             },
             
             // Message Operations
@@ -129,7 +141,7 @@ export class Enreach implements INodeType {
                 displayName: 'JWT Token (Auto)',
                 name: 'jwt',
                 type: 'hidden',
-                default: '={{ $json.jwt || $("Enreach Trigger").item.json.jwt }}',
+                default: '={{ $parameter.triggerNodeName ? $($parameter.triggerNodeName).item.json.jwt : ($json.jwt || $("Enreach Trigger").item.json.jwt) }}',
                 displayOptions: {
                     show: {
                         operation: ['sendAndWait', 'sendMessage'],
@@ -140,7 +152,7 @@ export class Enreach implements INodeType {
                 displayName: 'Callback URL (Auto)',
                 name: 'callbackUrl',
                 type: 'hidden',
-                default: '={{ $json.callbackUrl || $("Enreach Trigger").item.json.callbackUrl }}',
+                default: '={{ $parameter.triggerNodeName ? $($parameter.triggerNodeName).item.json.callbackUrl : ($json.callbackUrl || $("Enreach Trigger").item.json.callbackUrl) }}',
                 displayOptions: {
                     show: {
                         operation: ['sendAndWait', 'sendMessage'],
@@ -508,4 +520,5 @@ export class Enreach implements INodeType {
         // If no errors or error output not enabled, return single array
         return [returnData];
     }
+
 }

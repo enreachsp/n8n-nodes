@@ -253,9 +253,28 @@ async function processMessageCommon(
 ): Promise<{ sentData: EnreachSentData; messageBody: EnreachMessageBody }> {
     // Extract common parameters
     const type = executeFunctions.getNodeParameter('type', itemIndex) as string;
-    const callbackUrl = executeFunctions.getNodeParameter('callbackUrl', itemIndex) as string;
-    const jwt = executeFunctions.getNodeParameter('jwt', itemIndex) as string;
     const text = executeFunctions.getNodeParameter('text', itemIndex) as string;
+    
+    // Extract trigger node name and validate
+    const triggerNodeName = executeFunctions.getNodeParameter('triggerNodeName', itemIndex, 'Enreach Trigger') as string;
+    
+    let callbackUrl: string;
+    let jwt: string;
+    
+    try {
+        callbackUrl = executeFunctions.getNodeParameter('callbackUrl', itemIndex) as string;
+        jwt = executeFunctions.getNodeParameter('jwt', itemIndex) as string;
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        
+        // Check if it's a "Referenced node doesn't exist" error
+        if (errorMessage.includes("doesn't exist") || errorMessage.includes("not found")) {
+            throw new Error(`❌ Trigger node "${triggerNodeName}" not found. Check the node name exists and is connected to this workflow.`);
+        }
+        
+        // Re-throw original error if it's something else
+        throw error;
+    }
     
     // Parse and validate options
     const parsedOptions = extractAndParseOptions(executeFunctions, itemIndex, type);
