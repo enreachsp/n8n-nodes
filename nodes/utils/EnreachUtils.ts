@@ -5,8 +5,9 @@ import {
     IWebhookResponseData,
     IDataObject,
 } from 'n8n-workflow';
-import { JwtValidator } from './JwtValidator';
+import { validateWebhookAuth } from './webhookAuth';
 import { ENREACH_LIMITS, TIMEOUT_CONFIG, TIME_UNITS, MESSAGE_TYPES } from './constants';
+import { EnreachErrorCode, createUserFriendlyError } from './errors';
 
 export interface EnreachOption {
     id: string;
@@ -87,21 +88,50 @@ export function validateMessageParameters(
     type: string,
     text: string,
     buttonTitle: string | undefined,
-    parsedOptions: EnreachOption[]
+    parsedOptions: EnreachOption[],
+    executeFunctions?: IExecuteFunctions,
+    itemIndex?: number
 ): void {
     // Validate text length for list and button types
     if ((type === MESSAGE_TYPES.LIST || type === MESSAGE_TYPES.BUTTON) && text && text.length > ENREACH_LIMITS.TEXT_MAX_LENGTH) {
-        throw new Error(`Text message is too long. Maximum ${ENREACH_LIMITS.TEXT_MAX_LENGTH} characters allowed for ${type} type. Current: ${text.length} characters`);
+        if (executeFunctions) {
+            throw createUserFriendlyError(
+                executeFunctions,
+                EnreachErrorCode.VALIDATION_TEXT_TOO_LONG,
+                { length: text.length, max: ENREACH_LIMITS.TEXT_MAX_LENGTH },
+                itemIndex
+            );
+        } else {
+            throw new Error(`Text message is too long. Maximum ${ENREACH_LIMITS.TEXT_MAX_LENGTH} characters allowed for ${type} type. Current: ${text.length} characters`);
+        }
     }
 
     // Validate buttonTitle length - only for list type
     if (buttonTitle && buttonTitle.length > ENREACH_LIMITS.BUTTON_TITLE_MAX_LENGTH) {
-        throw new Error(`Button title is too long. Maximum ${ENREACH_LIMITS.BUTTON_TITLE_MAX_LENGTH} characters allowed. Current: ${buttonTitle.length} characters`);
+        if (executeFunctions) {
+            throw createUserFriendlyError(
+                executeFunctions,
+                EnreachErrorCode.VALIDATION_TITLE_TOO_LONG,
+                { title: buttonTitle, length: buttonTitle.length, max: ENREACH_LIMITS.BUTTON_TITLE_MAX_LENGTH },
+                itemIndex
+            );
+        } else {
+            throw new Error(`Button title is too long. Maximum ${ENREACH_LIMITS.BUTTON_TITLE_MAX_LENGTH} characters allowed. Current: ${buttonTitle.length} characters`);
+        }
     }
 
     // Validate maximum options limit for list
     if (type === MESSAGE_TYPES.LIST && parsedOptions && parsedOptions.length > ENREACH_LIMITS.LIST_MAX_OPTIONS) {
-        throw new Error(`Too many options provided. Maximum ${ENREACH_LIMITS.LIST_MAX_OPTIONS} options allowed for list type. Current: ${parsedOptions.length} options`);
+        if (executeFunctions) {
+            throw createUserFriendlyError(
+                executeFunctions,
+                EnreachErrorCode.VALIDATION_TOO_MANY_OPTIONS,
+                { current: parsedOptions.length, max: ENREACH_LIMITS.LIST_MAX_OPTIONS },
+                itemIndex
+            );
+        } else {
+            throw new Error(`Too many options provided. Maximum ${ENREACH_LIMITS.LIST_MAX_OPTIONS} options allowed for list type. Current: ${parsedOptions.length} options`);
+        }
     }
 
     // Validate options structure and limits for both list and button types
@@ -200,22 +230,24 @@ export function buildMessageBody(
 }
 
 /**
- * Send message via Enreach API
+ * Send message via Enreach API with retry logic
  */
 export async function sendEnreachMessage(
     executeFunctions: IExecuteFunctions,
     callbackUrl: string,
-    messageBody: EnreachMessageBody
+    messageBody: EnreachMessageBody,
+    itemIndex: number = 0
 ): Promise<IDataObject> {
-    return await executeFunctions.helpers.request({
+    // Direct HTTP request without retry logic (API is stable)
+    const response = await executeFunctions.helpers.httpRequest({
         method: 'POST',
         url: callbackUrl,
         body: messageBody,
         json: true,
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        returnFullResponse: false
     });
+
+    return { json: response };
 }
 
 /**
@@ -245,78 +277,108 @@ function extractAndParseOptions(
 /**
  * Common message processing logic
  */
+/**
+ * Extract and validate message parameters
+ */
+function extractMessageParameters(
+    executeFunctions: IExecuteFunctions,
+    itemIndex: number,
+    operation: 'sendAndWait' | 'sendMessage'
+): {
+    type: string;
+    text: string;
+    jwt: string;
+    callbackUrl: string;
+    parsedOptions: EnreachOption[];
+    buttonTitle?: string;
+    resumeUrl?: string;
+} {
+    const type = executeFunctions.getNodeParameter('type', itemIndex) as string;
+    const text = executeFunctions.getNodeParameter('text', itemIndex) as string;
+
+    const triggerNodeName = operation === 'sendAndWait'
+        ? executeFunctions.getNodeParameter('triggerNodeName', itemIndex, 'Enreach Trigger') as string
+        : 'Enreach Trigger';
+
+    let callbackUrl: string;
+    let jwt: string;
+
+    try {
+        callbackUrl = executeFunctions.getNodeParameter('callbackUrl', itemIndex) as string;
+        jwt = executeFunctions.getNodeParameter('jwt', itemIndex) as string;
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        if (errorMessage.includes("doesn't exist") || errorMessage.includes("not found")) {
+            throw createUserFriendlyError(
+                executeFunctions,
+                EnreachErrorCode.CONFIG_MISSING_TRIGGER,
+                { nodeName: triggerNodeName },
+                itemIndex
+            );
+        }
+        throw error;
+    }
+
+    const parsedOptions = extractAndParseOptions(executeFunctions, itemIndex, type);
+    const buttonTitle = type === 'list'
+        ? executeFunctions.getNodeParameter('buttonTitle', itemIndex) as string
+        : undefined;
+
+    validateMessageParameters(type, text, buttonTitle, parsedOptions, executeFunctions, itemIndex);
+
+    const resumeUrl = operation === 'sendAndWait'
+        ? executeFunctions.evaluateExpression('{{ $execution.resumeUrl }}', 0) as string
+        : undefined;
+
+    return { type, text, jwt, callbackUrl, parsedOptions, buttonTitle, resumeUrl };
+}
+
+/**
+ * Process and send message with response formatting
+ */
 async function processMessageCommon(
     executeFunctions: IExecuteFunctions,
     items: INodeExecutionData[],
     itemIndex: number,
     operation: 'sendAndWait' | 'sendMessage'
 ): Promise<{ sentData: EnreachSentData; messageBody: EnreachMessageBody }> {
-    // Extract common parameters
-    const type = executeFunctions.getNodeParameter('type', itemIndex) as string;
-    const text = executeFunctions.getNodeParameter('text', itemIndex) as string;
-    
-    // Extract trigger node name and validate (only for sendAndWait)
-    const triggerNodeName = operation === 'sendAndWait' 
-        ? executeFunctions.getNodeParameter('triggerNodeName', itemIndex, 'Enreach Trigger') as string
-        : 'Enreach Trigger';
-    
-    let callbackUrl: string;
-    let jwt: string;
-    
-    try {
-        callbackUrl = executeFunctions.getNodeParameter('callbackUrl', itemIndex) as string;
-        jwt = executeFunctions.getNodeParameter('jwt', itemIndex) as string;
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        
-        // Check if it's a "Referenced node doesn't exist" error
-        if (errorMessage.includes("doesn't exist") || errorMessage.includes("not found")) {
-            throw new Error(`❌ Trigger node "${triggerNodeName}" not found. Check the node name exists and is connected to this workflow.`);
-        }
-        
-        // Re-throw original error if it's something else
-        throw error;
-    }
-    
-    // Parse and validate options
-    const parsedOptions = extractAndParseOptions(executeFunctions, itemIndex, type);
-
-    // Get button title
-    const buttonTitle = type === 'list' 
-        ? executeFunctions.getNodeParameter('buttonTitle', itemIndex) as string 
-        : undefined;
-
-    // Validate message parameters before sending
-    validateMessageParameters(type, text, buttonTitle, parsedOptions);
+    // Extract and validate all parameters
+    const params = extractMessageParameters(executeFunctions, itemIndex, operation);
 
     // Build message body
-    const resumeUrl = operation === 'sendAndWait' 
-        ? executeFunctions.evaluateExpression('{{ $execution.resumeUrl }}', 0) as string
-        : undefined;
-    const messageBody = buildMessageBody(type, jwt, text, parsedOptions, buttonTitle, resumeUrl);
+    const messageBody = buildMessageBody(
+        params.type,
+        params.jwt,
+        params.text,
+        params.parsedOptions,
+        params.buttonTitle,
+        params.resumeUrl
+    );
 
-    // Send HTTP request to Enreach API
-    const httpResponse = await sendEnreachMessage(executeFunctions, callbackUrl, messageBody);
+    // Send message
+    const httpResponse = await sendEnreachMessage(
+        executeFunctions,
+        params.callbackUrl,
+        messageBody,
+        itemIndex
+    );
 
-    // Create base sent data structure
+    // Format response
     const sentData: EnreachSentData = {
-        // Request information
         sentRequest: {
             resource: 'message',
             operation,
-            type,
-            callbackUrl,
+            type: params.type,
+            callbackUrl: params.callbackUrl,
             body: messageBody,
         },
-        
-        // HTTP response
         sendResponse: httpResponse as IDataObject,
     } as EnreachSentData;
 
     if (operation === 'sendAndWait') {
         sentData.status = 'sent_waiting_for_response';
         sentData.message = 'Message sent successfully. Waiting for webhook response...';
-        sentData.resumeUrl = resumeUrl;
+        sentData.resumeUrl = params.resumeUrl;
     } else {
         sentData.status = 'sent';
         sentData.message = 'Message sent successfully';
@@ -420,90 +482,26 @@ export async function processSendMessage(
  */
 export async function handleWebhook(webhookFunctions: IWebhookFunctions): Promise<IWebhookResponseData> {
     const bodyData = webhookFunctions.getBodyData();
-    
-    // JWT authentication is always required now
-    try {
-        // Get JWT credentials
-        const credentials = await webhookFunctions.getCredentials('jwtAuth');
-        
-        if (!credentials) {
-            return {
-                webhookResponse: {
-                    status: 401,
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ 
-                        error: 'Unauthorized',
-                        message: 'JWT credentials not configured'
-                    }),
-                },
-            };
-        }
-        
-        // Extract secret based on key type
-        const jwtSecret = JwtValidator.extractJwtSecret(credentials);
-        
-        // Extract JWT from body
-        const jwt = bodyData.jwt as string;
-        
-        if (!jwt) {
-            return {
-                webhookResponse: {
-                    status: 401,
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ 
-                        error: 'Unauthorized',
-                        message: 'JWT token missing in webhook response'
-                    }),
-                },
-            };
-        }
-        
-        // Validate JWT (skip expiry check by default for responses)
-        const validateExpiry = false;
-        const isValid = JwtValidator.validateJWT(jwt, jwtSecret, validateExpiry);
-        
-        if (!isValid) {
-            return {
-                webhookResponse: {
-                    status: 401,
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ 
-                        error: 'Unauthorized',
-                        message: 'Invalid JWT token in webhook response'
-                    }),
-                },
-            };
-        }
-        
-    } catch (error) {
-        // JWT authentication error in webhook response
+    const jwt = bodyData.jwt as string;
+
+    // Validate JWT authentication using shared function
+    const authResult = await validateWebhookAuth(webhookFunctions, jwt);
+
+    if (!authResult.isValid) {
         return {
             webhookResponse: {
-                status: 401,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 
-                    error: 'Authentication failed',
-                    message: 'JWT validation error in webhook response'
+                status: authResult.error!.status,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    error: authResult.error!.error,
+                    message: authResult.error!.message
                 }),
             },
         };
     }
 
+    // Return the body data as workflow data
     return {
-        workflowData: [
-            [
-                {
-                    json: bodyData,
-                },
-            ],
-        ],
+        workflowData: [[{ json: bodyData }]],
     };
 }

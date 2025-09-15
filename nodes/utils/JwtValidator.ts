@@ -6,9 +6,9 @@ import { IDataObject } from 'n8n-workflow';
  */
 export class JwtValidator {
     /**
-     * Validate JWT token structure and signature
+     * Validate JWT token structure, signature and expiry
      */
-    static validateJWT(token: string, secret: string, validateExpiry: boolean = false): boolean {
+    static validateJWT(token: string, secret: string): boolean {
         try {
             // JWT structure: header.payload.signature
             const parts = token.split('.');
@@ -28,15 +28,13 @@ export class JwtValidator {
                 return false;
             }
 
-            // Optionally validate expiry
-            if (validateExpiry) {
-                const payloadData = JSON.parse(Buffer.from(payload, 'base64url').toString());
-                
-                if (payloadData.exp) {
-                    const now = Math.floor(Date.now() / 1000);
-                    if (payloadData.exp < now) {
-                        return false; // Token expired
-                    }
+            // Always validate expiry if present
+            const payloadData = JSON.parse(Buffer.from(payload, 'base64url').toString());
+
+            if (payloadData.exp) {
+                const now = Math.floor(Date.now() / 1000);
+                if (payloadData.exp < now) {
+                    return false; // Token expired
                 }
             }
 
@@ -82,17 +80,10 @@ export class JwtValidator {
     }
 
     /**
-     * Extract JWT secret from n8n credentials based on key type
+     * Extract JWT secret from Enreach API credentials
      */
-    static extractJwtSecret(credentials: IDataObject): string {
-        const keyType = credentials.keyType as string;
-        
-        if (keyType === 'passphrase') {
-            return credentials.secret as string;
-        } else if (keyType === 'pemKey') {
-            return credentials.publicKey as string;
-        }
-        
-        return credentials.secret as string;
+    static extractEnreachSecret(credentials: IDataObject): string {
+        // Simple extraction - just the JWT secret
+        return credentials.jwtSecret as string || '';
     }
 }

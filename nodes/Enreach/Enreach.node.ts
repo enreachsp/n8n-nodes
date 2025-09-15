@@ -30,7 +30,7 @@ export class Enreach implements INodeType {
         outputs: [NodeConnectionType.Main],
         credentials: [
             {
-                name: 'jwtAuth',
+                name: 'enreachApi',
                 required: true,
             },
         ],
@@ -76,9 +76,10 @@ export class Enreach implements INodeType {
                 },
                 default: 'Enreach Trigger',
                 placeholder: 'Enreach Trigger',
-                description: 'Name of the trigger node to get JWT and callback URL from. You can reference a specific trigger node if you have multiple triggers in your workflow.',
-                hint: 'Enter the exact name of your Enreach Trigger node',
+                description: 'Name of the trigger node to get JWT and callback URL from. You can reference a specific trigger node if you have multiple triggers in your workflow. Supports expressions.',
+                hint: 'Enter the exact name of your Enreach Trigger node or use expressions like {{ $json.triggerName }}',
                 required: false,
+                noDataExpression: false,
             },
             
             // Message Operations

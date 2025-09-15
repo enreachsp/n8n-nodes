@@ -7,7 +7,7 @@ import {
 	NodeConnectionType,
 } from 'n8n-workflow';
 import { randomUUID } from 'crypto';
-import { JwtValidator } from '../utils/JwtValidator';
+import { validateWebhookAuth } from '../utils/webhookAuth';
 
 export class EnreachTrigger implements INodeType {
 	description: INodeTypeDescription = {
@@ -25,7 +25,7 @@ export class EnreachTrigger implements INodeType {
 		outputs: [NodeConnectionType.Main],
 		credentials: [
 			{
-				name: 'jwtAuth',
+				name: 'enreachApi',
 				required: true,
 			},
 		],
@@ -117,119 +117,42 @@ export class EnreachTrigger implements INodeType {
 	};
 
 	async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
-		// Get webhook body first
+		// Get webhook body
 		const bodyData = this.getBodyData();
-		
-		// JWT Authentication validation (always required)
-		try {
-				// Get JWT credentials (using n8n's native jwtAuth)
-				const credentials = await this.getCredentials('jwtAuth');
-				
-				if (!credentials) {
-					return {
-						webhookResponse: {
-							status: 401,
-							headers: {
-								'Content-Type': 'application/json',
-							},
-							body: JSON.stringify({ 
-								error: 'Unauthorized',
-								message: 'JWT credentials not configured'
-							}),
-						},
-					};
-				}
-				
-				// Extract secret based on key type
-				const jwtSecret = JwtValidator.extractJwtSecret(credentials);
-				
-				// Algorithm is available in credentials.algorithm
-				// const algorithm = credentials.algorithm as string;
-				
-				// For now, we don't validate expiry - could be added later if needed
-				const validateExpiry = false;
-				
-				// Extract JWT from body (Enreach sends JWT in body)
-				const jwt = bodyData.jwt as string;
-				
-				if (!jwt) {
-					return {
-						webhookResponse: {
-							status: 401,
-							headers: {
-								'Content-Type': 'application/json',
-							},
-							body: JSON.stringify({ 
-								error: 'Unauthorized',
-								message: 'JWT token missing in request body'
-							}),
-						},
-					};
-				}
-				
-				// Validate JWT
-				const isValid = JwtValidator.validateJWT(jwt, jwtSecret, validateExpiry);
-				
-				if (!isValid) {
-					return {
-						webhookResponse: {
-							status: 401,
-							headers: {
-								'Content-Type': 'application/json',
-							},
-							body: JSON.stringify({ 
-								error: 'Unauthorized',
-								message: 'Invalid or expired JWT token'
-							}),
-						},
-					};
-				}
-				
-				// JWT decoded for debugging only in development
-				// const decoded = JwtValidator.decodeJWT(jwt);
-			} catch (error) {
-			// JWT authentication error
+		const jwt = bodyData.jwt as string;
+
+		// Validate JWT authentication
+		const authResult = await validateWebhookAuth(this, jwt);
+
+		if (!authResult.isValid) {
 			return {
 				webhookResponse: {
-					status: 401,
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify({ 
-						error: 'Authentication failed',
-						message: 'JWT validation error'
+					status: authResult.error!.status,
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						error: authResult.error!.error,
+						message: authResult.error!.message
 					}),
 				},
 			};
 		}
-		
-		// Continue with normal webhook processing after successful authentication
+
+		// Get selected events and format response
 		const selectedEvents = this.getNodeParameter('events') as string[];
 
-		// Extract Enreach specific data from the webhook payload
-		const callbackUrl = bodyData.callbackUrl as string;
-		const id = bodyData.id as string;
-		const jwt = bodyData.jwt as string;
-		const sid = bodyData.sid as string;
-
 		return {
-			workflowData: [
-				[
-					{
-						json: {
-							// Enreach webhook data
-							callbackUrl: callbackUrl,
-							id: id,
-							jwt: jwt,
-							sid: sid,
-							// Additional metadata
-							picAppEvents: selectedEvents,
-							// Include all original data for flexibility
-							...bodyData,
-						},
+			workflowData: [[
+				{
+					json: {
+						callbackUrl: bodyData.callbackUrl as string,
+						id: bodyData.id as string,
+						jwt: jwt,
+						sid: bodyData.sid as string,
+						picAppEvents: selectedEvents,
+						...bodyData,
 					},
-				],
-			],
+				},
+			]],
 		};
 	}
 }
