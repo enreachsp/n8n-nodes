@@ -5,14 +5,19 @@ const merge = require('merge-stream');
 task('build:icons', copyIcons);
 
 function copyIcons() {
-	const nodeSource = path.resolve('nodes', '**', '*.{png,svg}');
-	const nodeDestination = path.resolve('dist', 'nodes');
+	// Copier les icônes des nodes en préservant la structure complète des dossiers
+	const nodeEnreachSource = path.resolve('nodes', 'Enreach', '*.{png,svg}');
+	const nodeEnreachDest = path.resolve('dist', 'nodes', 'Enreach');
+
+	const nodeTriggerSource = path.resolve('nodes', 'EnreachTrigger', '*.{png,svg}');
+	const nodeTriggerDest = path.resolve('dist', 'nodes', 'EnreachTrigger');
 
 	const credentialsSource = path.resolve('credentials', '*.{png,svg}');
 	const credentialsDestination = path.resolve('dist', 'credentials');
 
-	const nodeStream = src(nodeSource).pipe(dest(nodeDestination));
+	const nodeEnreachStream = src(nodeEnreachSource).pipe(dest(nodeEnreachDest));
+	const nodeTriggerStream = src(nodeTriggerSource).pipe(dest(nodeTriggerDest));
 	const credentialsStream = src(credentialsSource).pipe(dest(credentialsDestination));
 
-	return merge(nodeStream, credentialsStream);
+	return merge(nodeEnreachStream, nodeTriggerStream, credentialsStream);
 }
