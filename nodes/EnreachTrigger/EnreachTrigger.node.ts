@@ -4,7 +4,6 @@ import {
 	INodeType,
 	INodeTypeDescription,
 	IWebhookResponseData,
-	NodeConnectionType,
 } from 'n8n-workflow';
 import { randomUUID } from 'crypto';
 import { validateWebhookAuth } from '../utils/webhookAuth';
@@ -22,7 +21,7 @@ export class EnreachTrigger implements INodeType {
 			name: 'Enreach Trigger',
 		},
 		inputs: [],
-		outputs: [NodeConnectionType.Main],
+		outputs: ['main'],
 		credentials: [
 			{
 				name: 'enreachApi',

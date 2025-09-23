@@ -5,7 +5,6 @@ import {
     INodeTypeDescription,
     INodeExecutionData,
     IWebhookResponseData,
-    NodeConnectionType,
 } from 'n8n-workflow';
 
 import {
@@ -19,15 +18,16 @@ export class Enreach implements INodeType {
         displayName: 'Enreach',
         name: 'enreach',
         icon: 'file:enreach.svg',
-        group: ['communication'],
+        group: ['transform'],
         version: 1,
         subtitle: '={{$parameter["operation"]}}',
         description: 'Interact with Enreach API for message and communication workflows',
         defaults: {
             name: 'Enreach',
         },
-        inputs: [NodeConnectionType.Main],
-        outputs: [NodeConnectionType.Main],
+        inputs: ['main'],
+        outputs: ['main'],
+        usableAsTool: true,
         credentials: [
             {
                 name: 'enreachApi',
