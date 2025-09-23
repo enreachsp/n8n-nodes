@@ -48,7 +48,8 @@
     ],
     "nodes": [
       "dist/nodes/Enreach/Enreach.node.js",
-      "dist/nodes/EnreachTrigger/EnreachTrigger.node.js"
+      "dist/nodes/EnreachTrigger/EnreachTrigger.node.js",
+      "dist/nodes/EnreachTool/EnreachTool.node.js"
     ]
   },
   "devDependencies": {
