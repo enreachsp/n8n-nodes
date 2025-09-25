@@ -25,7 +25,12 @@ export class EnreachTrigger implements INodeType {
 		credentials: [
 			{
 				name: 'enreachApi',
-				required: true,
+				required: false,
+				displayOptions: {
+					show: {
+						authMethod: ['jwtAuth'],
+					},
+				},
 			},
 		],
 		webhooks: [
@@ -38,6 +43,27 @@ export class EnreachTrigger implements INodeType {
 			},
 		],
 		properties: [
+			{
+				displayName: 'Authentication',
+				name: 'authMethod',
+				type: 'options',
+				noDataExpression: true,
+				options: [
+					{
+						name: 'None',
+						value: 'none',
+						description: 'Accept all webhook requests without authentication',
+					},
+					{
+						name: 'JWT Auth',
+						value: 'jwtAuth',
+						description: 'Validate JWT token with configured secret',
+					},
+				],
+				default: 'jwtAuth',
+				description: 'Choose how to authenticate incoming webhook requests',
+				required: true,
+			},
 			{
 				displayName: 'Webhook Path',
 				name: 'webhookPath',
@@ -118,10 +144,11 @@ export class EnreachTrigger implements INodeType {
 	async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
 		// Get webhook body
 		const bodyData = this.getBodyData();
-		const jwt = bodyData.jwt as string;
+		const authMethod = this.getNodeParameter('authMethod') as string;
 
-		// Validate JWT authentication
-		const authResult = await validateWebhookAuth(this, jwt);
+		// Validate authentication based on selected method
+		const jwt = bodyData.jwt as string;
+		const authResult = await validateWebhookAuth(this, jwt, authMethod);
 
 		if (!authResult.isValid) {
 			return {
@@ -145,9 +172,10 @@ export class EnreachTrigger implements INodeType {
 					json: {
 						callbackUrl: bodyData.callbackUrl as string,
 						id: bodyData.id as string,
-						jwt: jwt,
+						jwt: bodyData.jwt as string,
 						sid: bodyData.sid as string,
 						picAppEvents: selectedEvents,
+						authMethod: authMethod,
 						...bodyData,
 					},
 				},

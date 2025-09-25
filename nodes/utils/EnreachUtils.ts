@@ -27,7 +27,7 @@ export interface ManualOptions {
 
 export interface EnreachMessageBody {
     type: string;
-    jwt: string;
+    jwt?: string;
     resumUrl?: string;  // Note: Enreach uses 'resumUrl' not 'resumeUrl'
     text: string;
     options: EnreachOption[];
@@ -215,6 +215,11 @@ export function buildMessageBody(
         options: parsedOptions,
     };
 
+    // Only add JWT if it's provided (not empty)
+    if (!jwt) {
+        delete messageBody.jwt;
+    }
+
     // Add resumUrl if provided (for sendAndWait)
     // Note: Enreach API expects 'resumUrl' not 'resumeUrl'
     if (resumeUrl) {
@@ -295,28 +300,34 @@ function extractMessageParameters(
 } {
     const type = executeFunctions.getNodeParameter('type', itemIndex) as string;
     const text = executeFunctions.getNodeParameter('text', itemIndex) as string;
+    // For sendMessage, always use 'none' (no auth needed)
+    const authMethod = operation === 'sendMessage'
+        ? 'none'
+        : executeFunctions.getNodeParameter('authMethod', itemIndex, 'jwtAuth') as string;
 
-    const triggerNodeName = operation === 'sendAndWait'
-        ? executeFunctions.getNodeParameter('triggerNodeName', itemIndex, 'Enreach Trigger') as string
-        : 'Enreach Trigger';
+    let callbackUrl: string = '';
+    let jwt: string = '';
 
-    let callbackUrl: string;
-    let jwt: string;
+    if (authMethod === 'jwtAuth') {
+        const triggerNodeName = operation === 'sendAndWait'
+            ? executeFunctions.getNodeParameter('triggerNodeName', itemIndex, 'Enreach Trigger') as string
+            : 'Enreach Trigger';
 
-    try {
-        callbackUrl = executeFunctions.getNodeParameter('callbackUrl', itemIndex) as string;
-        jwt = executeFunctions.getNodeParameter('jwt', itemIndex) as string;
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        if (errorMessage.includes("doesn't exist") || errorMessage.includes("not found")) {
-            throw createUserFriendlyError(
-                executeFunctions,
-                EnreachErrorCode.CONFIG_MISSING_TRIGGER,
-                { nodeName: triggerNodeName },
-                itemIndex
-            );
+        try {
+            callbackUrl = executeFunctions.getNodeParameter('callbackUrl', itemIndex) as string;
+            jwt = executeFunctions.getNodeParameter('jwt', itemIndex) as string;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            if (errorMessage.includes("doesn't exist") || errorMessage.includes("not found")) {
+                throw createUserFriendlyError(
+                    executeFunctions,
+                    EnreachErrorCode.CONFIG_MISSING_TRIGGER,
+                    { nodeName: triggerNodeName },
+                    itemIndex
+                );
+            }
+            throw error;
         }
-        throw error;
     }
 
     const parsedOptions = extractAndParseOptions(executeFunctions, itemIndex, type);
@@ -484,8 +495,9 @@ export async function handleWebhook(webhookFunctions: IWebhookFunctions): Promis
     const bodyData = webhookFunctions.getBodyData();
     const jwt = bodyData.jwt as string;
 
-    // Validate JWT authentication using shared function
-    const authResult = await validateWebhookAuth(webhookFunctions, jwt);
+    // For Enreach node webhooks, we assume autoDetect authentication (legacy support)
+    // The EnreachTrigger node handles its own authentication method
+    const authResult = await validateWebhookAuth(webhookFunctions, jwt, 'jwtAuth');
 
     if (!authResult.isValid) {
         return {

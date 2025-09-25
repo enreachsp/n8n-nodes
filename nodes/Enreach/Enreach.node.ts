@@ -31,7 +31,13 @@ export class Enreach implements INodeType {
         credentials: [
             {
                 name: 'enreachApi',
-                required: true,
+                required: false,
+                displayOptions: {
+                    show: {
+                        operation: ['sendAndWait'],
+                        authMethod: ['jwtAuth'],
+                    },
+                },
             },
         ],
         webhooks: [
@@ -55,34 +61,34 @@ export class Enreach implements INodeType {
             },
         ],
         properties: [
-            // Important Notice
+            // Authentication
             {
-                displayName: 'Auto-Detection Notice',
-                name: 'autoDetectionNotice',
-                type: 'notice',
-                default: '',
-                description: '⚠️ JWT and Callback URL are auto-detected from the workflow. They first check the previous node, then look for "Enreach Trigger" node. For "Send and Wait" operation, you can specify a different trigger node name.',
-            },
-            
-            // Trigger Node Selection
-            {
-                displayName: 'Trigger Node Name',
-                name: 'triggerNodeName',
-                type: 'string',
+                displayName: 'Authentication',
+                name: 'authMethod',
+                type: 'options',
+                noDataExpression: true,
                 displayOptions: {
                     show: {
                         operation: ['sendAndWait'],
                     },
                 },
-                default: 'Enreach Trigger',
-                placeholder: 'Enreach Trigger',
-                description: 'Name of the trigger node to get JWT and callback URL from. You can reference a specific trigger node if you have multiple triggers in your workflow. Supports expressions.',
-                hint: 'Enter the exact name of your Enreach Trigger node or use expressions like {{ $json.triggerName }}',
-                required: false,
-                noDataExpression: false,
+                options: [
+                    {
+                        name: 'None',
+                        value: 'none',
+                        description: 'Accept all webhook requests without authentication',
+                    },
+                    {
+                        name: 'JWT Auth',
+                        value: 'jwtAuth',
+                        description: 'Validate JWT token with configured secret',
+                    },
+                ],
+                default: 'jwtAuth',
+                description: 'Choose how to authenticate incoming webhook requests',
+                required: true,
             },
-            
-            // Message Operations
+            // Message Operations - First
             {
                 displayName: 'Operation',
                 name: 'operation',
@@ -104,6 +110,25 @@ export class Enreach implements INodeType {
                 ],
                 default: 'sendAndWait',
                 required: true,
+            },
+
+
+            // Trigger Node Name
+            {
+                displayName: 'Trigger Node Name',
+                name: 'triggerNodeName',
+                type: 'string',
+                displayOptions: {
+                    show: {
+                        operation: ['sendAndWait'],
+                        authMethod: ['jwtAuth'],
+                    },
+                },
+                default: 'Enreach Trigger',
+                placeholder: 'Enreach Trigger',
+                description: 'Name of the Enreach Trigger node to get data from',
+                hint: 'Enter the exact name of the Enreach Trigger node in this workflow',
+                required: false,
             },
 
             // Message Type
@@ -150,7 +175,8 @@ export class Enreach implements INodeType {
                 default: '={{ $parameter.triggerNodeName ? $($parameter.triggerNodeName).item.json.jwt : ($json.jwt || $("Enreach Trigger").item.json.jwt) }}',
                 displayOptions: {
                     show: {
-                        operation: ['sendAndWait', 'sendMessage'],
+                        operation: ['sendAndWait'],
+                        authMethod: ['jwtAuth'],
                     },
                 },
             },

@@ -17,8 +17,14 @@ export interface WebhookAuthResult {
  */
 export async function validateWebhookAuth(
     webhookFunctions: IWebhookFunctions,
-    jwt: string | undefined
+    jwt: string | undefined,
+    authMethod?: string
 ): Promise<WebhookAuthResult> {
+    // If authentication is disabled, always return valid
+    if (authMethod === 'none') {
+        return { isValid: true };
+    }
+
     // Check JWT exists
     if (!jwt) {
         return {
@@ -31,8 +37,22 @@ export async function validateWebhookAuth(
         };
     }
 
-    // Get credentials
-    const credentials = await webhookFunctions.getCredentials('enreachApi');
+    // Get credentials - they might not be configured if auth is disabled
+    let credentials;
+    try {
+        credentials = await webhookFunctions.getCredentials('enreachApi');
+    } catch (error) {
+        // Credentials not configured but JWT validation requested
+        return {
+            isValid: false,
+            error: {
+                status: 401,
+                error: 'Unauthorized',
+                message: 'Enreach API credentials not configured'
+            }
+        };
+    }
+
     if (!credentials) {
         return {
             isValid: false,
