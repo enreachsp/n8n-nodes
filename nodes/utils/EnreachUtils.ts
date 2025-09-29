@@ -308,26 +308,29 @@ function extractMessageParameters(
     let callbackUrl: string = '';
     let jwt: string = '';
 
-    if (authMethod === 'jwtAuth') {
-        const triggerNodeName = operation === 'sendAndWait'
-            ? executeFunctions.getNodeParameter('triggerNodeName', itemIndex, 'Enreach Trigger') as string
-            : 'Enreach Trigger';
+    // Always try to get callbackUrl, regardless of auth method
+    const triggerNodeName = operation === 'sendAndWait'
+        ? executeFunctions.getNodeParameter('triggerNodeName', itemIndex, 'Enreach Trigger') as string
+        : 'Enreach Trigger';
 
-        try {
-            callbackUrl = executeFunctions.getNodeParameter('callbackUrl', itemIndex) as string;
+    try {
+        callbackUrl = executeFunctions.getNodeParameter('callbackUrl', itemIndex) as string;
+
+        // Only get JWT if auth method requires it
+        if (authMethod === 'jwtAuth') {
             jwt = executeFunctions.getNodeParameter('jwt', itemIndex) as string;
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            if (errorMessage.includes("doesn't exist") || errorMessage.includes("not found")) {
-                throw createUserFriendlyError(
-                    executeFunctions,
-                    EnreachErrorCode.CONFIG_MISSING_TRIGGER,
-                    { nodeName: triggerNodeName },
-                    itemIndex
-                );
-            }
-            throw error;
         }
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        if (errorMessage.includes("doesn't exist") || errorMessage.includes("not found")) {
+            throw createUserFriendlyError(
+                executeFunctions,
+                EnreachErrorCode.CONFIG_MISSING_TRIGGER,
+                { nodeName: triggerNodeName },
+                itemIndex
+            );
+        }
+        throw error;
     }
 
     const parsedOptions = extractAndParseOptions(executeFunctions, itemIndex, type);
@@ -491,13 +494,23 @@ export async function processSendMessage(
 /**
  * Handle webhook response
  */
-export async function handleWebhook(webhookFunctions: IWebhookFunctions): Promise<IWebhookResponseData> {
+export async function handleWebhook(webhookFunctions: IWebhookFunctions, authMethod?: string): Promise<IWebhookResponseData> {
     const bodyData = webhookFunctions.getBodyData();
     const jwt = bodyData.jwt as string;
 
-    // For Enreach node webhooks, we assume autoDetect authentication (legacy support)
-    // The EnreachTrigger node handles its own authentication method
-    const authResult = await validateWebhookAuth(webhookFunctions, jwt, 'jwtAuth');
+    // Use provided authMethod, or detect from context
+    let finalAuthMethod = authMethod;
+    if (!finalAuthMethod) {
+        // Try to get auth method from node parameters if available
+        try {
+            finalAuthMethod = webhookFunctions.getNodeParameter('authMethod') as string;
+        } catch {
+            // Default to 'none' if can't determine auth method
+            finalAuthMethod = 'none';
+        }
+    }
+
+    const authResult = await validateWebhookAuth(webhookFunctions, jwt, finalAuthMethod);
 
     if (!authResult.isValid) {
         return {

@@ -5,7 +5,7 @@ import {
 
 export class EnreachApi implements ICredentialType {
 	name = 'enreachApi';
-	displayName = 'Credential for JWT Auth';
+	displayName = 'JWT Auth';
 	documentationUrl = 'https://docs.enreach.com';
 	icon = {
 		light: 'file:enreach.svg',

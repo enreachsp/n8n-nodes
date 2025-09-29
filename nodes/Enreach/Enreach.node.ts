@@ -493,7 +493,15 @@ export class Enreach implements INodeType {
     };
 
     async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
-        return handleWebhook(this);
+        // Get auth method from node parameters
+        let authMethod: string;
+        try {
+            authMethod = this.getNodeParameter('authMethod') as string;
+        } catch {
+            // Default to 'none' if parameter not found
+            authMethod = 'none';
+        }
+        return handleWebhook(this, authMethod);
     }
 
     async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
