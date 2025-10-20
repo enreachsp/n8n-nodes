@@ -12,12 +12,16 @@ function copyIcons() {
     const nodeTriggerSource = path.resolve('nodes', 'EnreachTrigger', '*.{png,svg}');
     const nodeTriggerDest = path.resolve('dist', 'nodes', 'EnreachTrigger');
 
+    const nodeWebSocketSource = path.resolve('nodes', 'EnreachWebSocket', '*.{png,svg}');
+    const nodeWebSocketDest = path.resolve('dist', 'nodes', 'EnreachWebSocket');
+
     const credentialsSource = path.resolve('credentials', '*.{png,svg}');
     const credentialsDestination = path.resolve('dist', 'credentials');
 
     const nodeEnreachStream = src(nodeEnreachSource, { allowEmpty: true }).pipe(dest(nodeEnreachDest));
     const nodeTriggerStream = src(nodeTriggerSource, { allowEmpty: true }).pipe(dest(nodeTriggerDest));
+    const nodeWebSocketStream = src(nodeWebSocketSource, { allowEmpty: true }).pipe(dest(nodeWebSocketDest));
     const credentialsStream = src(credentialsSource, { allowEmpty: true }).pipe(dest(credentialsDestination));
 
-    return merge(nodeEnreachStream, nodeTriggerStream, credentialsStream);
+    return merge(nodeEnreachStream, nodeTriggerStream, nodeWebSocketStream, credentialsStream);
 }

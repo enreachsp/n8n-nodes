@@ -5,6 +5,7 @@ import {
     INodeTypeDescription,
     INodeExecutionData,
     IWebhookResponseData,
+    ApplicationError,
 } from 'n8n-workflow';
 
 import {
@@ -128,7 +129,6 @@ export class Enreach implements INodeType {
                 placeholder: 'Enreach Trigger',
                 description: 'Name of the Enreach Trigger node to get data from',
                 hint: 'Enter the exact name of the Enreach Trigger node in this workflow',
-                required: false,
             },
 
             // Message Type
@@ -210,7 +210,6 @@ export class Enreach implements INodeType {
                 placeholder: 'Choose an option (max 20 chars)',
                 description: 'Title for the button (max 20 characters, only for list type)',
                 hint: 'Maximum 20 characters',
-                required: false,
             },
             {
                 displayName: 'Text',
@@ -255,7 +254,7 @@ export class Enreach implements INodeType {
                         description: 'Define each option manually',
                     },
                 ],
-                default: 'Manual Mapping',
+                default: 'json',
                 description: 'How to provide the options',
             },
             
@@ -273,7 +272,6 @@ export class Enreach implements INodeType {
                 },
                 default: '[]',
                 description: 'Options array (minimum 3 options for list type, any number for button type)',
-                required: false,
             },
             
             // Manual Options Mapping for List
@@ -520,7 +518,7 @@ export class Enreach implements INodeType {
                 } else if (operation === 'sendMessage') {
                     result = await processSendMessage(this, items, i);
                 } else {
-                    throw new Error(`The operation "${operation}" is not supported`);
+                    throw new ApplicationError(`The operation "${operation}" is not supported`);
                 }
                 
                 returnData.push(result);
