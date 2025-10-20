@@ -254,7 +254,7 @@ export class Enreach implements INodeType {
                         description: 'Define each option manually',
                     },
                 ],
-                default: 'json',
+                default: 'manual',
                 description: 'How to provide the options',
             },
             
