@@ -21,6 +21,7 @@ export class Enreach implements INodeType {
         icon: 'file:enreach.svg',
         group: ['transform'],
         version: 1,
+        documentationUrl: 'https://www.enreach.com/',
         subtitle: '={{$parameter["operation"]}}',
         description: 'Interact with Enreach API for message and communication workflows',
         defaults: {

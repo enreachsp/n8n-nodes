@@ -45,13 +45,11 @@
     ],
     "nodes": [
       "dist/nodes/Enreach/Enreach.node.js",
-      "dist/nodes/EnreachTrigger/EnreachTrigger.node.js",
-      "dist/nodes/EnreachWebSocket/EnreachWebSocket.node.js"
+      "dist/nodes/EnreachTrigger/EnreachTrigger.node.js"
     ]
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "@types/ws": "^8.5.10",
     "@typescript-eslint/eslint-plugin": "^8.46.1",
     "@typescript-eslint/parser": "^8.46.1",
     "eslint": "^8.0.0",
@@ -60,9 +58,6 @@
     "merge-stream": "^2.0.0",
     "rimraf": "^5.0.0",
     "typescript": "^5.8.2"
-  },
-  "dependencies": {
-    "ws": "^8.18.0"
   },
   "peerDependencies": {
     "n8n-workflow": "*"
