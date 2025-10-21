@@ -207,8 +207,8 @@ export class Enreach implements INodeType {
                 typeOptions: {
                     maxLength: 20,
                 },
-                default: 'Select',
-                placeholder: 'e.g., Select, Choose, Pick one (max 20 chars)',
+                default: 'choose an option',
+                placeholder: 'Choose an option (max 20 chars)',
                 description: 'Title for the button (max 20 characters, only for list type)',
                 hint: 'Maximum 20 characters',
             },
@@ -231,7 +231,7 @@ export class Enreach implements INodeType {
                 hint: 'Maximum 1024 characters for list and button types',
                 required: true,
             },
-            
+
             // Options Input Mode
             {
                 displayName: 'Options Input Mode',
@@ -258,7 +258,7 @@ export class Enreach implements INodeType {
                 default: 'manual',
                 description: 'How to provide the options',
             },
-            
+
             // JSON Options (original)
             {
                 displayName: 'Options',
@@ -274,7 +274,7 @@ export class Enreach implements INodeType {
                 default: '[]',
                 description: 'Options array (minimum 3 options for list type, any number for button type)',
             },
-            
+
             // Manual Options Mapping for List
             {
                 displayName: 'Options',
@@ -333,7 +333,7 @@ export class Enreach implements INodeType {
                     },
                 ],
             },
-            
+
             // Manual Options Mapping for Button
             {
                 displayName: 'Options',
@@ -505,14 +505,13 @@ export class Enreach implements INodeType {
 
     async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
         const items = this.getInputData();
+        const operation = this.getNodeParameter('operation', 0) as string;
 
         const returnData: INodeExecutionData[] = [];
         const errorData: INodeExecutionData[] = [];
 
         for (let i = 0; i < items.length; i++) {
             try {
-                // Get operation for each item individually
-                const operation = this.getNodeParameter('operation', i) as string;
                 let result: INodeExecutionData;
 
                 if (operation === 'sendAndWait') {
@@ -526,8 +525,6 @@ export class Enreach implements INodeType {
                 returnData.push(result);
             } catch (error) {
                 if (this.continueOnFail()) {
-                    // Get operation for error reporting
-                    const operation = this.getNodeParameter('operation', i) as string;
                     const errorItem = {
                         json: {
                             error: (error as Error).message,
@@ -539,9 +536,6 @@ export class Enreach implements INodeType {
                         pairedItem: { item: i },
                     };
 
-                    // Check if error output is enabled (Continue using error output)
-                    // If continueOnFail is true but no error output, add to main output
-                    // n8n handles this automatically based on user settings
                     errorData.push(errorItem);
                 } else {
                     // Stop workflow on error
@@ -550,16 +544,10 @@ export class Enreach implements INodeType {
             }
         }
 
-        // n8n automatically detects if "Continue (using error output)" is selected
-        // and expects 2 arrays when error output is enabled
-        // The second output is only visible in UI when user selects that option
         if (errorData.length > 0) {
-            // Return both success and error data
-            // n8n will route them to appropriate outputs based on settings
             return [returnData, errorData];
         }
-        
-        // If no errors or error output not enabled, return single array
+
         return [returnData];
     }
 

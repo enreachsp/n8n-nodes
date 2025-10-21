@@ -54,7 +54,6 @@ export class JwtValidator {
             return authHeader.substring(7);
         }
         
-        // Fall back to JWT in body (Enreach style)
         if (bodyJwt) {
             return bodyJwt;
         }

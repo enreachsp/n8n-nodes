@@ -22,7 +22,7 @@ export interface ManualOptions {
 export interface EnreachMessageBody {
     type: string;
     jwt?: string;
-    resumUrl?: string;  // Note: Enreach uses 'resumUrl' not 'resumeUrl'
+    resumUrl?: string; 
     text: string;
     options: EnreachOption[];
     buttonTitle?: string;
