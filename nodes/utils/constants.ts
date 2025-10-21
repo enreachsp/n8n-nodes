@@ -6,7 +6,6 @@
 export const ENREACH_LIMITS = {
     TEXT_MAX_LENGTH: 1024,
     BUTTON_TITLE_MAX_LENGTH: 20,
-    OPTION_ID_MAX_LENGTH: 256,
     LIST_MIN_OPTIONS: 3,
     LIST_MAX_OPTIONS: 10,
 } as const;
@@ -26,22 +25,10 @@ export const TIME_UNITS = {
     days: 24 * 60 * 60 * 1000,
 } as const;
 
-// Event types
-export const ENREACH_EVENTS = {
-    CHAT_HISTORY: 'chat.history.conversation',
-    ACD_QUALIFICATION: 'acd.call.qualification',
-} as const;
-
 // Message types
 export const MESSAGE_TYPES = {
     TEXT: 'text',
     BUTTON: 'button',
     LIST: 'list',
     ANNOTATION: 'annotation',
-} as const;
-
-// Authentication methods
-export const AUTH_METHODS = {
-    NONE: 'none',
-    JWT: 'jwtAuth',
 } as const;

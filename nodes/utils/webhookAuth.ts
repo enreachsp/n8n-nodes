@@ -37,23 +37,12 @@ export async function validateWebhookAuth(
         };
     }
 
-    // Get credentials - they might not be configured if auth is disabled
+    // Get credentials
     let credentials;
     try {
         credentials = await webhookFunctions.getCredentials('enreachApi');
     } catch (error) {
         // Credentials not configured but JWT validation requested
-        return {
-            isValid: false,
-            error: {
-                status: 401,
-                error: 'Unauthorized',
-                message: 'Enreach API credentials not configured'
-            }
-        };
-    }
-
-    if (!credentials) {
         return {
             isValid: false,
             error: {

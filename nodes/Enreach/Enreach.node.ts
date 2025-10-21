@@ -207,8 +207,8 @@ export class Enreach implements INodeType {
                 typeOptions: {
                     maxLength: 20,
                 },
-                default: 'choose an option',
-                placeholder: 'Choose an option (max 20 chars)',
+                default: 'Select',
+                placeholder: 'e.g., Select, Choose, Pick one (max 20 chars)',
                 description: 'Title for the button (max 20 characters, only for list type)',
                 hint: 'Maximum 20 characters',
             },
@@ -505,15 +505,16 @@ export class Enreach implements INodeType {
 
     async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
         const items = this.getInputData();
-        const operation = this.getNodeParameter('operation', 0) as string;
-        
+
         const returnData: INodeExecutionData[] = [];
         const errorData: INodeExecutionData[] = [];
 
         for (let i = 0; i < items.length; i++) {
             try {
+                // Get operation for each item individually
+                const operation = this.getNodeParameter('operation', i) as string;
                 let result: INodeExecutionData;
-                
+
                 if (operation === 'sendAndWait') {
                     result = await processSendAndWait(this, items, i);
                 } else if (operation === 'sendMessage') {
@@ -521,10 +522,12 @@ export class Enreach implements INodeType {
                 } else {
                     throw new ApplicationError(`The operation "${operation}" is not supported`);
                 }
-                
+
                 returnData.push(result);
             } catch (error) {
                 if (this.continueOnFail()) {
+                    // Get operation for error reporting
+                    const operation = this.getNodeParameter('operation', i) as string;
                     const errorItem = {
                         json: {
                             error: (error as Error).message,
@@ -535,7 +538,7 @@ export class Enreach implements INodeType {
                         },
                         pairedItem: { item: i },
                     };
-                    
+
                     // Check if error output is enabled (Continue using error output)
                     // If continueOnFail is true but no error output, add to main output
                     // n8n handles this automatically based on user settings

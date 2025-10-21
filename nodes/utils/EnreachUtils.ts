@@ -15,14 +15,8 @@ export interface EnreachOption {
     description?: string;
 }
 
-export interface ManualOptionField {
-    id: string;
-    title: string;
-    description?: string;
-}
-
 export interface ManualOptions {
-    fields: ManualOptionField[];
+    fields: EnreachOption[];
 }
 
 export interface EnreachMessageBody {
@@ -64,7 +58,11 @@ export function calculateTimeout(
     }
 
     if (limitType === 'dateTime') {
-        return new Date(dateTime);
+        const date = new Date(dateTime);
+        if (isNaN(date.getTime())) {
+            throw new Error(`Invalid date/time value: "${dateTime}". Please provide a valid date.`);
+        }
+        return date;
     }
 
     // timeInterval - Calculate using milliseconds for accuracy
@@ -135,15 +133,15 @@ export function validateMessageParameters(
     }
 
     // Validate options structure and limits for both list and button types
-    if ((type === 'button' || type === 'list') && parsedOptions) {
+    if ((type === MESSAGE_TYPES.BUTTON || type === MESSAGE_TYPES.LIST) && parsedOptions) {
         parsedOptions.forEach((option, index) => {
             // Validate ID length (256 character limit)
             if (option.id && option.id.length > 256) {
                 throw new Error(`Option ${index + 1} ID is too long. Maximum 256 characters allowed. Current: ${option.id.length} characters`);
             }
             // Validate title length (20 character limit) for button type
-            if (type === 'button' && option.title && option.title.length > 20) {
-                throw new Error(`Option ${index + 1} title is too long. Maximum 20 characters allowed. Current: ${option.title.length} characters`);
+            if (type === MESSAGE_TYPES.BUTTON && option.title && option.title.length > ENREACH_LIMITS.BUTTON_TITLE_MAX_LENGTH) {
+                throw new Error(`Option ${index + 1} title is too long. Maximum ${ENREACH_LIMITS.BUTTON_TITLE_MAX_LENGTH} characters allowed. Current: ${option.title.length} characters`);
             }
         });
     }
@@ -159,20 +157,8 @@ export function parseOptions(options: string | object | undefined, type: string,
         // Handle manual mapping format from fixedCollection
         const manualOptions = options as ManualOptions;
         if (manualOptions.fields && Array.isArray(manualOptions.fields)) {
-            // For both list and button types, use the ID provided by user
-            parsedOptions = manualOptions.fields.map((field: ManualOptionField) => {
-                const option: EnreachOption = {
-                    id: field.id || '',
-                    title: field.title || '',
-                };
-                
-                // Add description if provided (only for list type)
-                if (field.description) {
-                    option.description = field.description;
-                }
-                
-                return option;
-            });
+            // Fields are already in the correct format
+            parsedOptions = manualOptions.fields;
         }
     } else {
         // Handle JSON format (original)
@@ -185,7 +171,8 @@ export function parseOptions(options: string | object | undefined, type: string,
                 parsedOptions = options as EnreachOption[];
             }
         } catch (error) {
-            parsedOptions = [];
+            const errorMessage = error instanceof Error ? error.message : 'Invalid JSON';
+            throw new Error(`Failed to parse options JSON: ${errorMessage}. Please provide valid JSON array.`);
         }
     }
 
@@ -210,14 +197,13 @@ export function buildMessageBody(
 ): EnreachMessageBody {
     const messageBody: EnreachMessageBody = {
         type,
-        jwt,
         text,
         options: parsedOptions,
     };
 
-    // Only add JWT if it's provided (not empty)
-    if (!jwt) {
-        delete messageBody.jwt;
+    // Add JWT if provided (not empty)
+    if (jwt) {
+        messageBody.jwt = jwt;
     }
 
     // Add resumUrl if provided (for sendAndWait)
@@ -227,7 +213,7 @@ export function buildMessageBody(
     }
 
     // Add buttonTitle only for list type
-    if (type === 'list' && buttonTitle) {
+    if (type === MESSAGE_TYPES.LIST && buttonTitle) {
         messageBody.buttonTitle = buttonTitle;
     }
 
@@ -235,7 +221,7 @@ export function buildMessageBody(
 }
 
 /**
- * Send message via Enreach API with retry logic
+ * Send message via Enreach API
  */
 export async function sendEnreachMessage(
     executeFunctions: IExecuteFunctions,
@@ -243,7 +229,6 @@ export async function sendEnreachMessage(
     messageBody: EnreachMessageBody,
     itemIndex: number = 0
 ): Promise<IDataObject> {
-    // Direct HTTP request without retry logic (API is stable)
     const response = await executeFunctions.helpers.httpRequest({
         method: 'POST',
         url: callbackUrl,
@@ -252,7 +237,7 @@ export async function sendEnreachMessage(
         returnFullResponse: false
     });
 
-    return { json: response };
+    return response as IDataObject;
 }
 
 /**
@@ -263,14 +248,14 @@ function extractAndParseOptions(
     itemIndex: number,
     type: string
 ): EnreachOption[] {
-    if (type !== 'list' && type !== 'button') {
+    if (type !== MESSAGE_TYPES.LIST && type !== MESSAGE_TYPES.BUTTON) {
         return [];
     }
 
     const optionsInputMode = executeFunctions.getNodeParameter('optionsInputMode', itemIndex, 'json') as string;
-    
+
     if (optionsInputMode === 'manual') {
-        const paramName = type === 'button' ? 'optionsManualButton' : 'optionsManual';
+        const paramName = type === MESSAGE_TYPES.BUTTON ? 'optionsManualButton' : 'optionsManual';
         const options = executeFunctions.getNodeParameter(paramName, itemIndex, {}) as object;
         return parseOptions(options, type, true);
     } else {
@@ -334,14 +319,14 @@ function extractMessageParameters(
     }
 
     const parsedOptions = extractAndParseOptions(executeFunctions, itemIndex, type);
-    const buttonTitle = type === 'list'
+    const buttonTitle = type === MESSAGE_TYPES.LIST
         ? executeFunctions.getNodeParameter('buttonTitle', itemIndex) as string
         : undefined;
 
     validateMessageParameters(type, text, buttonTitle, parsedOptions, executeFunctions, itemIndex);
 
     const resumeUrl = operation === 'sendAndWait'
-        ? executeFunctions.evaluateExpression('{{ $execution.resumeUrl }}', 0) as string
+        ? executeFunctions.evaluateExpression('{{ $execution.resumeUrl }}', itemIndex) as string
         : undefined;
 
     return { type, text, jwt, callbackUrl, parsedOptions, buttonTitle, resumeUrl };
@@ -352,7 +337,6 @@ function extractMessageParameters(
  */
 async function processMessageCommon(
     executeFunctions: IExecuteFunctions,
-    items: INodeExecutionData[],
     itemIndex: number,
     operation: 'sendAndWait' | 'sendMessage'
 ): Promise<{ sentData: EnreachSentData; messageBody: EnreachMessageBody }> {
@@ -412,7 +396,6 @@ export async function processSendAndWait(
     // Process common logic
     const { sentData } = await processMessageCommon(
         executeFunctions,
-        items,
         itemIndex,
         'sendAndWait'
     );
@@ -432,17 +415,14 @@ export async function processSendAndWait(
 
     // Handle timeout configuration
     let finalTimeout: Date;
-    
+
     if (limitWaitTime && waitTimeout) {
-        // User has configured a specific timeout
+        // User configured timeout with -1s buffer for n8n processing overhead
         const adjustedTime = waitTimeout.getTime() - TIMEOUT_CONFIG.PROCESSING_BUFFER_MS;
         finalTimeout = new Date(Math.max(adjustedTime, Date.now() + TIMEOUT_CONFIG.MIN_TIMEOUT_MS));
-        
-        // Timeout configured with -1s adjustment for n8n processing overhead
     } else {
-        // No timeout configured - wait for configured default period (effectively indefinite)
+        // No timeout limit - wait up to 1 year for webhook response
         finalTimeout = new Date(Date.now() + TIMEOUT_CONFIG.DEFAULT_WAIT_YEARS * 365 * TIME_UNITS.days);
-        // No timeout limit configured - waiting up to 1 year for webhook response
     }
     
     await executeFunctions.putExecutionToWait(finalTimeout);
@@ -472,7 +452,6 @@ export async function processSendMessage(
     // Process common logic
     const { sentData, messageBody } = await processMessageCommon(
         executeFunctions,
-        items,
         itemIndex,
         'sendMessage'
     );
@@ -484,8 +463,6 @@ export async function processSendMessage(
             message: sentData.message,
             type: messageBody.type,
             text: messageBody.text,
-            // Include response status code if available
-            responseStatus: sentData.sendResponse?.statusCode || 200,
         },
         pairedItem: { item: itemIndex },
     };

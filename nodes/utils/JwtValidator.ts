@@ -83,7 +83,10 @@ export class JwtValidator {
      * Extract JWT secret from Enreach API credentials
      */
     static extractEnreachSecret(credentials: IDataObject): string {
-        // Simple extraction - just the JWT secret
-        return credentials.jwtSecret as string || '';
+        const secret = credentials.jwtSecret as string;
+        if (!secret || secret.trim() === '') {
+            throw new Error('JWT secret is not configured in Enreach API credentials');
+        }
+        return secret;
     }
 }
