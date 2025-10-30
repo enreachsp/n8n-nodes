@@ -173,7 +173,7 @@ export class Enreach implements INodeType {
                 displayName: 'JWT Token (Auto)',
                 name: 'jwt',
                 type: 'hidden',
-                default: '={{ $parameter.triggerNodeName ? $($parameter.triggerNodeName).item.json.jwt : ($json.jwt || $("Enreach Trigger").item.json.jwt) }}',
+                default: '={{ $($parameter.triggerNodeName || "Enreach Trigger").item.json.jwt }}',
                 displayOptions: {
                     show: {
                         operation: ['sendAndWait'],
@@ -185,7 +185,7 @@ export class Enreach implements INodeType {
                 displayName: 'Callback URL (Auto)',
                 name: 'callbackUrl',
                 type: 'hidden',
-                default: '={{ $parameter.triggerNodeName ? $($parameter.triggerNodeName).item.json.callbackUrl : ($json.callbackUrl || $("Enreach Trigger").item.json.callbackUrl) }}',
+                default: '={{ $($parameter.triggerNodeName || "Enreach Trigger").item.json.callbackUrl }}',
                 displayOptions: {
                     show: {
                         operation: ['sendAndWait', 'sendMessage'],

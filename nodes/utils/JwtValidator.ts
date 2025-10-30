@@ -46,39 +46,6 @@ export class JwtValidator {
     }
 
     /**
-     * Extract JWT from Authorization header or body
-     */
-    static extractJWT(authHeader?: string, bodyJwt?: string): string | null {
-        // Check Authorization header first (Bearer token)
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-            return authHeader.substring(7);
-        }
-        
-        if (bodyJwt) {
-            return bodyJwt;
-        }
-
-        return null;
-    }
-
-    /**
-     * Decode JWT payload without validation (for debugging)
-     */
-    static decodeJWT(token: string): IDataObject | null {
-        try {
-            const parts = token.split('.');
-            if (parts.length !== 3) {
-                return null;
-            }
-            
-            const payload = Buffer.from(parts[1], 'base64url').toString();
-            return JSON.parse(payload);
-        } catch (error) {
-            return null;
-        }
-    }
-
-    /**
      * Extract JWT secret from Enreach API credentials
      */
     static extractEnreachSecret(credentials: IDataObject): string {

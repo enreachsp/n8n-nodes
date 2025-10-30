@@ -39,7 +39,7 @@ export interface EnreachSentData extends IDataObject {
     sendResponse: IDataObject;
     status: string;
     message: string;
-    resumeUrl?: string;
+    resumUrl?: string;
     webhookResponse?: IDataObject;
 }
 
@@ -193,7 +193,7 @@ export function buildMessageBody(
     text: string,
     parsedOptions: EnreachOption[],
     buttonTitle?: string,
-    resumeUrl?: string
+    resumUrl?: string
 ): EnreachMessageBody {
     const messageBody: EnreachMessageBody = {
         type,
@@ -207,9 +207,9 @@ export function buildMessageBody(
     }
 
     // Add resumUrl if provided (for sendAndWait)
-    // Note: Enreach API expects 'resumUrl' not 'resumeUrl'
-    if (resumeUrl) {
-        messageBody.resumUrl = resumeUrl;
+    // Note: Enreach API uses 'resumUrl' (without 'e')
+    if (resumUrl) {
+        messageBody.resumUrl = resumUrl;
     }
 
     // Add buttonTitle only for list type
@@ -281,7 +281,7 @@ function extractMessageParameters(
     callbackUrl: string;
     parsedOptions: EnreachOption[];
     buttonTitle?: string;
-    resumeUrl?: string;
+    resumUrl?: string;
 } {
     const type = executeFunctions.getNodeParameter('type', itemIndex) as string;
     const text = executeFunctions.getNodeParameter('text', itemIndex) as string;
@@ -325,11 +325,11 @@ function extractMessageParameters(
 
     validateMessageParameters(type, text, buttonTitle, parsedOptions, executeFunctions, itemIndex);
 
-    const resumeUrl = operation === 'sendAndWait'
+    const resumUrl = operation === 'sendAndWait'
         ? executeFunctions.evaluateExpression('{{ $execution.resumeUrl }}', itemIndex) as string
         : undefined;
 
-    return { type, text, jwt, callbackUrl, parsedOptions, buttonTitle, resumeUrl };
+    return { type, text, jwt, callbackUrl, parsedOptions, buttonTitle, resumUrl };
 }
 
 /**
@@ -350,7 +350,7 @@ async function processMessageCommon(
         params.text,
         params.parsedOptions,
         params.buttonTitle,
-        params.resumeUrl
+        params.resumUrl
     );
 
     // Send message
@@ -376,7 +376,7 @@ async function processMessageCommon(
     if (operation === 'sendAndWait') {
         sentData.status = 'sent_waiting_for_response';
         sentData.message = 'Message sent successfully. Waiting for webhook response...';
-        sentData.resumeUrl = params.resumeUrl;
+        sentData.resumUrl = params.resumUrl;
     } else {
         sentData.status = 'sent';
         sentData.message = 'Message sent successfully';

@@ -5,7 +5,7 @@ const merge = require('merge-stream');
 task('build:icons', copyIcons);
 
 function copyIcons() {
-    // Copier les icônes des nodes en préservant la structure complète des dossiers
+    // Copy node icons while preserving the complete folder structure
     const nodeEnreachSource = path.resolve('nodes', 'Enreach', '*.{png,svg}');
     const nodeEnreachDest = path.resolve('dist', 'nodes', 'Enreach');
 
