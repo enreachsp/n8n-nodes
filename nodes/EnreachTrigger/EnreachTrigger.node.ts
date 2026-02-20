@@ -15,7 +15,7 @@ export class EnreachTrigger implements INodeType {
 		icon: 'file:enreach.svg',
 		group: ['trigger'],
 		version: 2,
-		documentationUrl: 'https://developer-staging.sp.enreach.com/guide/n8n-node-custom-enreach-/node-trigger/node-enreach-%28-trigger-%29',
+		documentationUrl: 'https://developer.sp.enreach.com/guide/n8n-node-custom-enreach-/node-trigger/node-enreach-%28-trigger-%29',
 		subtitle: '={{$parameter["webhookPath"]}}',
 		description: 'Listen for Enreach webhook events (SMS delivery, failures, etc.)',
 		defaults: {

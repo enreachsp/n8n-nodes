@@ -5,8 +5,8 @@ import {
 
 export class EnreachApi implements ICredentialType {
 	name = 'enreachApi';
-	displayName = 'JWT Auth';
-	documentationUrl = 'https://developer-staging.sp.enreach.com/guide/n8n-node-custom-enreach-/credentials/credentials';
+	displayName = 'Enreach API';
+	documentationUrl = 'https://developer.sp.enreach.com/guide/n8n-node-custom-enreach-/credentials/credentials';
 	icon = 'file:enreach.svg' as const;
 	properties: INodeProperties[] = [
 		{
