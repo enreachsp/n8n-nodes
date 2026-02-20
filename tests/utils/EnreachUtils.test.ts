@@ -11,6 +11,7 @@ import {
 	EnreachMessageBody,
 } from '../../nodes/utils/EnreachUtils';
 import { MESSAGE_TYPES } from '../../nodes/utils/constants';
+import { createValidJWT } from '../helpers';
 
 describe('EnreachUtils', () => {
 	describe('calculateTimeout', () => {
@@ -378,9 +379,9 @@ describe('EnreachUtils', () => {
 			expect(result).toEqual({
 				type: MESSAGE_TYPES.TEXT,
 				text: 'Hello world',
-				options: [],
 			});
 			expect(result.jwt).toBeUndefined();
+			expect(result.options).toBeUndefined();
 			expect(result.resumUrl).toBeUndefined();
 		});
 
@@ -397,7 +398,6 @@ describe('EnreachUtils', () => {
 			expect(result).toEqual({
 				type: MESSAGE_TYPES.TEXT,
 				text: 'Hello world',
-				options: [],
 				jwt: 'test-jwt-token',
 			});
 			expect(result.resumUrl).toBeUndefined();
@@ -416,7 +416,7 @@ describe('EnreachUtils', () => {
 			expect(result.buttonTitle).toBeUndefined();
 		});
 
-		it('should handle empty options array', () => {
+		it('should omit options when empty', () => {
 			const result = buildMessageBody(
 				MESSAGE_TYPES.TEXT,
 				'jwt',
@@ -426,7 +426,7 @@ describe('EnreachUtils', () => {
 				undefined
 			);
 
-			expect(result.options).toEqual([]);
+			expect(result.options).toBeUndefined();
 		});
 	});
 
@@ -478,18 +478,6 @@ describe('EnreachUtils', () => {
 	describe('handleWebhook', () => {
 		const SECRET = 'test-secret-key-123';
 
-		function createValidJWT(payload: any, secret: string = SECRET): string {
-			const crypto = require('crypto');
-			const header = { alg: 'HS256', typ: 'JWT' };
-			const headerEncoded = Buffer.from(JSON.stringify(header)).toString('base64url');
-			const payloadEncoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
-			const signature = crypto
-				.createHmac('sha256', secret)
-				.update(`${headerEncoded}.${payloadEncoded}`)
-				.digest('base64url');
-			return `${headerEncoded}.${payloadEncoded}.${signature}`;
-		}
-
 		function createMockWebhookFunctions(bodyData: any = {}, credentials: any = { jwtSecret: SECRET }): any {
 			return {
 				getBodyData: jest.fn<any>().mockReturnValue(bodyData),
@@ -500,7 +488,7 @@ describe('EnreachUtils', () => {
 
 		it('should return workflow data on valid JWT auth', async () => {
 			const futureTime = Math.floor(Date.now() / 1000) + 3600;
-			const jwt = createValidJWT({ userId: '123', exp: futureTime });
+			const jwt = createValidJWT({ userId: '123', exp: futureTime }, SECRET);
 			const bodyData = { jwt, message: 'hello' };
 			const mockFn = createMockWebhookFunctions(bodyData);
 

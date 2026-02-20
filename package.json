@@ -14,8 +14,7 @@
   "license": "MIT",
   "homepage": "https://gitlab.com/enreach/private/enreach-up/istra/n8n-modules/node-enreach",
   "author": {
-    "name": "Enreach",
-    "email": "marin.pavel@enreach.com"
+    "name": "Enreach"
   },
   "repository": {
     "type": "git",

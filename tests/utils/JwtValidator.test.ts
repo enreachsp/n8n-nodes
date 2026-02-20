@@ -1,30 +1,22 @@
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import crypto from 'crypto';
 import { JwtValidator } from '../../nodes/utils/JwtValidator';
+import { createValidJWT } from '../helpers';
 
 describe('JwtValidator', () => {
 	const SECRET = 'test-secret-key-123';
 
-	/**
-	 * Helper function to create a valid JWT token
-	 */
-	function createValidJWT(payload: any, secret: string = SECRET): string {
-		const header = { alg: 'HS256', typ: 'JWT' };
-		const headerEncoded = Buffer.from(JSON.stringify(header)).toString('base64url');
-		const payloadEncoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+	// Convenience wrapper with default secret
+	const makeJWT = (payload: any, secret: string = SECRET): string => createValidJWT(payload, secret);
 
-		const signature = crypto
-			.createHmac('sha256', secret)
-			.update(`${headerEncoded}.${payloadEncoded}`)
-			.digest('base64url');
-
-		return `${headerEncoded}.${payloadEncoded}.${signature}`;
-	}
+	// TEST-02: Use fake timers for deterministic time-dependent tests
+	beforeEach(() => { jest.useFakeTimers(); });
+	afterEach(() => { jest.useRealTimers(); });
 
 	describe('validateJWT', () => {
 		it('should reject a valid JWT token without expiry claim', () => {
 			const payload = { userId: '123', data: 'test' };
-			const token = createValidJWT(payload);
+			const token = makeJWT(payload);
 
 			const result = JwtValidator.validateJWT(token, SECRET);
 
@@ -35,7 +27,7 @@ describe('JwtValidator', () => {
 		it('should validate a valid JWT token with future expiry', () => {
 			const futureTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
 			const payload = { userId: '123', exp: futureTime };
-			const token = createValidJWT(payload);
+			const token = makeJWT(payload);
 
 			const result = JwtValidator.validateJWT(token, SECRET);
 
@@ -45,7 +37,7 @@ describe('JwtValidator', () => {
 		it('should reject JWT token with past expiry', () => {
 			const pastTime = Math.floor(Date.now() / 1000) - 3600; // 1 hour ago
 			const payload = { userId: '123', exp: pastTime };
-			const token = createValidJWT(payload);
+			const token = makeJWT(payload);
 
 			const result = JwtValidator.validateJWT(token, SECRET);
 
@@ -54,7 +46,7 @@ describe('JwtValidator', () => {
 
 		it('should reject JWT token with invalid signature', () => {
 			const payload = { userId: '123' };
-			const token = createValidJWT(payload, SECRET);
+			const token = makeJWT(payload, SECRET);
 			const wrongSecret = 'wrong-secret';
 
 			const result = JwtValidator.validateJWT(token, wrongSecret);
@@ -86,7 +78,7 @@ describe('JwtValidator', () => {
 
 		it('should reject JWT with tampered payload', () => {
 			const payload = { userId: '123' };
-			const token = createValidJWT(payload);
+			const token = makeJWT(payload);
 
 			// Tamper with the payload
 			const parts = token.split('.');
@@ -109,7 +101,7 @@ describe('JwtValidator', () => {
 		it('should accept JWT with expiry exactly at current time (within clock tolerance)', () => {
 			const currentTime = Math.floor(Date.now() / 1000);
 			const payload = { userId: '123', exp: currentTime };
-			const token = createValidJWT(payload);
+			const token = makeJWT(payload);
 
 			const result = JwtValidator.validateJWT(token, SECRET);
 
@@ -126,7 +118,7 @@ describe('JwtValidator', () => {
 				metadata: { foo: 'bar' },
 				exp: futureTime,
 			};
-			const token = createValidJWT(payload);
+			const token = makeJWT(payload);
 
 			const result = JwtValidator.validateJWT(token, SECRET);
 
@@ -199,7 +191,7 @@ describe('JwtValidator', () => {
 				iat: Math.floor(Date.now() / 1000),
 				exp: Math.floor(Date.now() / 1000) + 3600,
 			};
-			const token = createValidJWT(payload);
+			const token = makeJWT(payload);
 
 			const result = JwtValidator.validateJWT(token, SECRET);
 
@@ -210,7 +202,7 @@ describe('JwtValidator', () => {
 			const longSecret = 'a'.repeat(1000);
 			const futureTime = Math.floor(Date.now() / 1000) + 3600;
 			const payload = { userId: '123', exp: futureTime };
-			const token = createValidJWT(payload, longSecret);
+			const token = makeJWT(payload, longSecret);
 
 			const result = JwtValidator.validateJWT(token, longSecret);
 
@@ -225,7 +217,7 @@ describe('JwtValidator', () => {
 				text: 'Héllo Wörld',
 				exp: futureTime,
 			};
-			const token = createValidJWT(payload);
+			const token = makeJWT(payload);
 
 			const result = JwtValidator.validateJWT(token, SECRET);
 
@@ -260,21 +252,21 @@ describe('JwtValidator', () => {
 
 		it('should reject JWT with exp: 0 (epoch bypass)', () => {
 			const payload = { userId: '123', exp: 0 };
-			const token = createValidJWT(payload);
+			const token = makeJWT(payload);
 
 			expect(JwtValidator.validateJWT(token, SECRET)).toBe(false);
 		});
 
 		it('should reject JWT without exp claim', () => {
 			const payload = { userId: '123', data: 'no-expiry' };
-			const token = createValidJWT(payload);
+			const token = makeJWT(payload);
 
 			expect(JwtValidator.validateJWT(token, SECRET)).toBe(false);
 		});
 
 		it('should reject JWT with exp as string', () => {
 			const payload = { userId: '123', exp: 'not-a-number' };
-			const token = createValidJWT(payload);
+			const token = makeJWT(payload);
 
 			expect(JwtValidator.validateJWT(token, SECRET)).toBe(false);
 		});
@@ -283,7 +275,7 @@ describe('JwtValidator', () => {
 			// Token expired 10 seconds ago -- within 30s tolerance
 			const recentPast = Math.floor(Date.now() / 1000) - 10;
 			const payload = { userId: '123', exp: recentPast };
-			const token = createValidJWT(payload);
+			const token = makeJWT(payload);
 
 			expect(JwtValidator.validateJWT(token, SECRET)).toBe(true);
 		});
@@ -292,7 +284,7 @@ describe('JwtValidator', () => {
 			// Token expired 60 seconds ago -- beyond 30s tolerance
 			const pastTime = Math.floor(Date.now() / 1000) - 60;
 			const payload = { userId: '123', exp: pastTime };
-			const token = createValidJWT(payload);
+			const token = makeJWT(payload);
 
 			expect(JwtValidator.validateJWT(token, SECRET)).toBe(false);
 		});

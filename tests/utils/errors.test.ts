@@ -36,7 +36,7 @@ describe('Errors', () => {
 
 			expect(error.message).toBe('Test error message');
 			expect(error.name).toBe('EnreachNodeError');
-			expect((error as any).errorCode).toBe(EnreachErrorCode.VALIDATION_TEXT_TOO_LONG);
+			expect(error.errorCode).toBe(EnreachErrorCode.VALIDATION_TEXT_TOO_LONG);
 		});
 
 		it('should include description in error', () => {
@@ -49,6 +49,7 @@ describe('Errors', () => {
 			);
 
 			expect(error.message).toBe('Test message');
+			expect(error.description).toBe('Custom description');
 		});
 
 		it('should include item index when provided', () => {
@@ -62,6 +63,7 @@ describe('Errors', () => {
 			);
 
 			expect(error.message).toBe('Test message');
+			expect(error.context).toBeDefined();
 		});
 	});
 

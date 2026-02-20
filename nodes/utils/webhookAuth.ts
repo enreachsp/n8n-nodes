@@ -24,8 +24,8 @@ export async function validateWebhookAuth(
         return { isValid: true };
     }
 
-    // Check JWT exists
-    if (!jwt) {
+    // Check JWT exists and is not whitespace-only
+    if (!jwt || !jwt.trim()) {
         return {
             isValid: false,
             error: {

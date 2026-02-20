@@ -22,9 +22,9 @@ export interface ManualOptions {
 export interface EnreachMessageBody {
     type: string;
     jwt?: string;
-    resumUrl?: string; 
+    resumUrl?: string;
     text: string;
-    options: EnreachOption[];
+    options?: EnreachOption[];
     buttonTitle?: string;
 }
 
@@ -213,8 +213,12 @@ export function buildMessageBody(
     const messageBody: EnreachMessageBody = {
         type,
         text,
-        options: parsedOptions,
     };
+
+    // Only include options for types that use them
+    if (parsedOptions.length > 0) {
+        messageBody.options = parsedOptions;
+    }
 
     // Add JWT if provided (not empty)
     if (jwt) {
@@ -242,7 +246,6 @@ export async function sendEnreachMessage(
     executeFunctions: IExecuteFunctions,
     callbackUrl: string,
     messageBody: EnreachMessageBody,
-    itemIndex: number = 0
 ): Promise<IDataObject> {
     const response = await executeFunctions.helpers.httpRequest({
         method: 'POST',
@@ -368,7 +371,6 @@ async function processMessageCommon(
         executeFunctions,
         params.callbackUrl,
         messageBody,
-        itemIndex
     );
 
     // Format response - omit JWT from stored data for security

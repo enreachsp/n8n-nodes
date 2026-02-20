@@ -1,5 +1,4 @@
-import { NodeOperationError } from 'n8n-workflow';
-import { IExecuteFunctions } from 'n8n-workflow';
+import { NodeOperationError, IExecuteFunctions } from 'n8n-workflow';
 
 export enum EnreachErrorCode {
 	// Configuration errors
@@ -62,7 +61,7 @@ function getErrorDescription(code: EnreachErrorCode): string {
 export function createUserFriendlyError(
 	executeFunctions: IExecuteFunctions,
 	code: EnreachErrorCode,
-	details: { [key: string]: any },
+	details: Record<string, string | number | boolean | undefined>,
 	itemIndex?: number
 ): EnreachNodeError {
 	const messages: Record<EnreachErrorCode, (details: any) => string> = {

@@ -6,6 +6,7 @@ import {
     INodeExecutionData,
     IWebhookResponseData,
     ApplicationError,
+    NodeOperationError,
 } from 'n8n-workflow';
 
 import {
@@ -43,15 +44,6 @@ export class Enreach implements INodeType {
             },
         ],
         webhooks: [
-            {
-                name: 'default',
-                httpMethod: 'GET',
-                responseMode: 'onReceived',
-                responseData: '',
-                path: '',
-                restartWebhook: true,
-                isFullPath: true,
-            },
             {
                 name: 'default',
                 httpMethod: 'POST',
@@ -525,7 +517,7 @@ export class Enreach implements INodeType {
                 } else if (operation === 'sendMessage') {
                     result = await processSendMessage(this, i);
                 } else {
-                    throw new ApplicationError(`The operation "${operation}" is not supported`);
+                    throw new NodeOperationError(this.getNode(), `The operation "${operation}" is not supported`);
                 }
 
                 returnData.push(result);

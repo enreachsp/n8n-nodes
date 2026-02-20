@@ -1,20 +1,6 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { validateWebhookAuth } from '../../nodes/utils/webhookAuth';
-import crypto from 'crypto';
-
-// Helper to create valid JWT
-function createValidJWT(payload: any, secret: string): string {
-	const header = { alg: 'HS256', typ: 'JWT' };
-	const headerEncoded = Buffer.from(JSON.stringify(header)).toString('base64url');
-	const payloadEncoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
-
-	const signature = crypto
-		.createHmac('sha256', secret)
-		.update(`${headerEncoded}.${payloadEncoded}`)
-		.digest('base64url');
-
-	return `${headerEncoded}.${payloadEncoded}.${signature}`;
-}
+import { createValidJWT } from '../helpers';
 
 describe('webhookAuth', () => {
 	const SECRET = 'test-secret-key';
