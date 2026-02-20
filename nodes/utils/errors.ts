@@ -10,9 +10,16 @@ export enum EnreachErrorCode {
 	VALIDATION_TITLE_TOO_LONG = 'VALIDATION_TITLE_TOO_LONG',
 	VALIDATION_INSUFFICIENT_OPTIONS = 'VALIDATION_INSUFFICIENT_OPTIONS',
 	VALIDATION_TOO_MANY_OPTIONS = 'VALIDATION_TOO_MANY_OPTIONS',
+	VALIDATION_OPTION_ID_TOO_LONG = 'VALIDATION_OPTION_ID_TOO_LONG',
+	VALIDATION_OPTION_TITLE_TOO_LONG = 'VALIDATION_OPTION_TITLE_TOO_LONG',
+	VALIDATION_INVALID_JSON = 'VALIDATION_INVALID_JSON',
+	VALIDATION_INVALID_DATETIME = 'VALIDATION_INVALID_DATETIME',
+	VALIDATION_INVALID_TIME_UNIT = 'VALIDATION_INVALID_TIME_UNIT',
 }
 
 export class EnreachNodeError extends NodeOperationError {
+	readonly errorCode: EnreachErrorCode;
+
 	constructor(
 		node: IExecuteFunctions,
 		message: string,
@@ -27,8 +34,7 @@ export class EnreachNodeError extends NodeOperationError {
 		});
 
 		this.name = 'EnreachNodeError';
-		// Store error code for programmatic handling
-		(this as any).errorCode = code;
+		this.errorCode = code;
 	}
 }
 
@@ -40,6 +46,11 @@ function getErrorDescription(code: EnreachErrorCode): string {
 		[EnreachErrorCode.VALIDATION_TITLE_TOO_LONG]: 'The button title exceeds the maximum allowed length of 20 characters.',
 		[EnreachErrorCode.VALIDATION_INSUFFICIENT_OPTIONS]: 'List type requires a minimum of 3 options.',
 		[EnreachErrorCode.VALIDATION_TOO_MANY_OPTIONS]: 'List type supports a maximum of 10 options.',
+		[EnreachErrorCode.VALIDATION_OPTION_ID_TOO_LONG]: 'Option ID exceeds the maximum allowed length of 256 characters.',
+		[EnreachErrorCode.VALIDATION_OPTION_TITLE_TOO_LONG]: 'Option title exceeds the maximum allowed length of 20 characters for button type.',
+		[EnreachErrorCode.VALIDATION_INVALID_JSON]: 'The provided JSON is not valid. Please provide a valid JSON array.',
+		[EnreachErrorCode.VALIDATION_INVALID_DATETIME]: 'The provided date/time value is not valid.',
+		[EnreachErrorCode.VALIDATION_INVALID_TIME_UNIT]: 'The provided time unit is not valid. Use seconds, minutes, hours, or days.',
 	};
 
 	return descriptions[code] || 'An unknown error occurred.';
@@ -70,8 +81,21 @@ export function createUserFriendlyError(
 		[EnreachErrorCode.CONFIG_MISSING_TRIGGER]: (d: any) =>
 			`Cannot find trigger node "${d.nodeName}". Please check the node name and ensure it exists in your workflow.`,
 
-		// Add more user-friendly messages as needed
-	} as any;
+		[EnreachErrorCode.VALIDATION_OPTION_ID_TOO_LONG]: (d: any) =>
+			`Option ${d.index} ID is too long (${d.length} characters). Maximum allowed: ${d.max} characters.`,
+
+		[EnreachErrorCode.VALIDATION_OPTION_TITLE_TOO_LONG]: (d: any) =>
+			`Option ${d.index} title is too long (${d.length} characters). Maximum allowed: ${d.max} characters.`,
+
+		[EnreachErrorCode.VALIDATION_INVALID_JSON]: (d: any) =>
+			`Failed to parse options JSON: ${d.error}. Please provide a valid JSON array.`,
+
+		[EnreachErrorCode.VALIDATION_INVALID_DATETIME]: (d: any) =>
+			`Invalid date/time value: "${d.value}". Please provide a valid date.`,
+
+		[EnreachErrorCode.VALIDATION_INVALID_TIME_UNIT]: (d: any) =>
+			`Unknown time unit: "${d.unit}". Valid units: ${d.validUnits}.`,
+	};
 
 	const messageGenerator = messages[code];
 	const message = messageGenerator ? messageGenerator(details) : 'Operation failed';

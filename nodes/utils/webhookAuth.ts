@@ -8,7 +8,6 @@ export interface WebhookAuthResult {
         message: string;
         error: string;
     };
-    jwtSecret?: string;
 }
 
 /**
@@ -69,7 +68,7 @@ export async function validateWebhookAuth(
             };
         }
 
-        return { isValid: true, jwtSecret };
+        return { isValid: true };
     } catch (error) {
         return {
             isValid: false,

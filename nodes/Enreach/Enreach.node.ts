@@ -63,7 +63,30 @@ export class Enreach implements INodeType {
             },
         ],
         properties: [
-            // Authentication
+            // Operation selector - primary control
+            {
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                options: [
+                    {
+                        name: 'Send and Wait',
+                        value: 'sendAndWait',
+                        description: 'Send a message and wait for response',
+                        action: 'Send message and wait for response',
+                    },
+                    {
+                        name: 'Send Message',
+                        value: 'sendMessage',
+                        description: 'Send a message without waiting for response',
+                        action: 'Send message',
+                    },
+                ],
+                default: 'sendAndWait',
+                required: true,
+            },
+            // Authentication - shown after operation selection
             {
                 displayName: 'Authentication',
                 name: 'authMethod',
@@ -90,30 +113,6 @@ export class Enreach implements INodeType {
                 description: 'Choose how to authenticate incoming webhook requests',
                 required: true,
             },
-            // Message Operations - First
-            {
-                displayName: 'Operation',
-                name: 'operation',
-                type: 'options',
-                noDataExpression: true,
-                options: [
-                    {
-                        name: 'Send and Wait',
-                        value: 'sendAndWait',
-                        description: 'Send a message and wait for response',
-                        action: 'Send message and wait for response',
-                    },
-                    {
-                        name: 'Send Message',
-                        value: 'sendMessage',
-                        description: 'Send a message without waiting for response',
-                        action: 'Send message',
-                    },
-                ],
-                default: 'sendAndWait',
-                required: true,
-            },
-
 
             // Trigger Node Name -- shown for all operations that need callbackUrl
             {

@@ -4,8 +4,9 @@ import {
 	INodeType,
 	INodeTypeDescription,
 	IWebhookResponseData,
+	ApplicationError,
 } from 'n8n-workflow';
-import { validateWebhookAuth } from '../utils/webhookAuth';
+import { handleWebhook } from '../utils/EnreachUtils';
 
 export class EnreachTrigger implements INodeType {
 	description: INodeTypeDescription = {
@@ -79,74 +80,25 @@ export class EnreachTrigger implements INodeType {
 	webhookMethods = {
 		default: {
 			async checkExists(this: IHookFunctions): Promise<boolean> {
-				const webhookData = this.getWorkflowStaticData('node');
-				
-				if (webhookData.webhookId === undefined) {
-					return false;
-				}
-
 				return true;
 			},
 
 			async create(this: IHookFunctions): Promise<boolean> {
-				const webhookUrl = this.getNodeWebhookUrl('default');
-
-				const response = {
-					id: `webhook_${Date.now()}`,
-					url: webhookUrl,
-				};
-
-				const webhookData = this.getWorkflowStaticData('node');
-				webhookData.webhookId = response.id;
-				webhookData.webhookUrl = webhookUrl;
-
+				const webhookPath = this.getNodeParameter('webhookPath') as string;
+				if (!webhookPath || !webhookPath.trim()) {
+					throw new ApplicationError('Webhook path cannot be empty. Please provide a unique, hard-to-guess value (e.g., UUID).');
+				}
 				return true;
 			},
 
 			async delete(this: IHookFunctions): Promise<boolean> {
-				const webhookData = this.getWorkflowStaticData('node');
-
-				if (webhookData.webhookId) {
-					delete webhookData.webhookId;
-					delete webhookData.webhookUrl;
-				}
-
 				return true;
 			},
 		},
 	};
 
 	async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
-		// Get webhook body
-		const bodyData = this.getBodyData();
 		const authMethod = this.getNodeParameter('authMethod') as string;
-
-		// Validate authentication based on selected method
-		const jwt = bodyData.jwt as string;
-		const authResult = await validateWebhookAuth(this, jwt, authMethod);
-
-		if (!authResult.isValid) {
-			return {
-				webhookResponse: {
-					status: authResult.error!.status,
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						error: authResult.error!.error,
-						message: authResult.error!.message
-					}),
-				},
-			};
-		}
-
-		return {
-			workflowData: [[
-				{
-					json: {
-						...bodyData,
-						authMethod: authMethod,
-					},
-				},
-			]],
-		};
+		return handleWebhook(this, authMethod);
 	}
 }

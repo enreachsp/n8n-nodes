@@ -70,13 +70,12 @@ export function calculateTimeout(
     let additionalMs = 0;
 
     const unitMultiplier = TIME_UNITS[unit as keyof typeof TIME_UNITS];
-    if (unitMultiplier) {
-        additionalMs = amount * unitMultiplier;
+    if (!unitMultiplier) {
+        throw new Error(`Unknown time unit: "${unit}". Valid units: ${Object.keys(TIME_UNITS).join(', ')}`);
     }
+    additionalMs = amount * unitMultiplier;
 
-    const timeout = new Date(now + additionalMs);
-
-    return timeout;
+    return new Date(now + additionalMs);
 }
 
 /**
@@ -135,13 +134,31 @@ export function validateMessageParameters(
     // Validate options structure and limits for both list and button types
     if ((type === MESSAGE_TYPES.BUTTON || type === MESSAGE_TYPES.LIST) && parsedOptions) {
         parsedOptions.forEach((option, index) => {
-            // Validate ID length (256 character limit)
-            if (option.id && option.id.length > 256) {
-                throw new Error(`Option ${index + 1} ID is too long. Maximum 256 characters allowed. Current: ${option.id.length} characters`);
+            // Validate ID length
+            if (option.id && option.id.length > ENREACH_LIMITS.OPTION_ID_MAX_LENGTH) {
+                if (executeFunctions) {
+                    throw createUserFriendlyError(
+                        executeFunctions,
+                        EnreachErrorCode.VALIDATION_OPTION_ID_TOO_LONG,
+                        { index: index + 1, length: option.id.length, max: ENREACH_LIMITS.OPTION_ID_MAX_LENGTH },
+                        itemIndex
+                    );
+                } else {
+                    throw new Error(`Option ${index + 1} ID is too long. Maximum ${ENREACH_LIMITS.OPTION_ID_MAX_LENGTH} characters allowed. Current: ${option.id.length} characters`);
+                }
             }
-            // Validate title length (20 character limit) for button type
+            // Validate title length for button type
             if (type === MESSAGE_TYPES.BUTTON && option.title && option.title.length > ENREACH_LIMITS.BUTTON_TITLE_MAX_LENGTH) {
-                throw new Error(`Option ${index + 1} title is too long. Maximum ${ENREACH_LIMITS.BUTTON_TITLE_MAX_LENGTH} characters allowed. Current: ${option.title.length} characters`);
+                if (executeFunctions) {
+                    throw createUserFriendlyError(
+                        executeFunctions,
+                        EnreachErrorCode.VALIDATION_OPTION_TITLE_TOO_LONG,
+                        { index: index + 1, length: option.title.length, max: ENREACH_LIMITS.BUTTON_TITLE_MAX_LENGTH },
+                        itemIndex
+                    );
+                } else {
+                    throw new Error(`Option ${index + 1} title is too long. Maximum ${ENREACH_LIMITS.BUTTON_TITLE_MAX_LENGTH} characters allowed. Current: ${option.title.length} characters`);
+                }
             }
         });
     }
@@ -167,8 +184,6 @@ export function parseOptions(options: string | object | undefined, type: string,
                 parsedOptions = JSON.parse(options);
             } else if (Array.isArray(options)) {
                 parsedOptions = options;
-            } else if (options) {
-                parsedOptions = options as EnreachOption[];
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Invalid JSON';
@@ -265,9 +280,6 @@ function extractAndParseOptions(
 }
 
 /**
- * Common message processing logic
- */
-/**
  * Extract and validate message parameters
  */
 function extractMessageParameters(
@@ -359,14 +371,17 @@ async function processMessageCommon(
         itemIndex
     );
 
-    // Format response
+    // Format response - omit JWT from stored data for security
+    const sanitizedBody: EnreachMessageBody = { ...messageBody };
+    delete sanitizedBody.jwt;
+
     const sentData: EnreachSentData = {
         sentRequest: {
             resource: 'message',
             operation,
             type: params.type,
             callbackUrl: params.callbackUrl,
-            body: messageBody,
+            body: sanitizedBody,
         },
         sendResponse: httpResponse as IDataObject,
     } as EnreachSentData;
@@ -486,13 +501,14 @@ export async function handleWebhook(webhookFunctions: IWebhookFunctions, authMet
     const authResult = await validateWebhookAuth(webhookFunctions, jwt, finalAuthMethod);
 
     if (!authResult.isValid) {
+        const error = authResult.error ?? { status: 401, error: 'Unauthorized', message: 'Authentication failed' };
         return {
             webhookResponse: {
-                status: authResult.error!.status,
+                status: error.status,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    error: authResult.error!.error,
-                    message: authResult.error!.message
+                    error: error.error,
+                    message: error.message
                 }),
             },
         };

@@ -59,7 +59,6 @@ describe('webhookAuth', () => {
 				const result = await validateWebhookAuth(mockFunctions, token, 'jwtAuth');
 
 				expect(result.isValid).toBe(true);
-				expect(result.jwtSecret).toBe(SECRET);
 			});
 
 			it('should reject when JWT is missing', async () => {

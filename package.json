@@ -12,17 +12,17 @@
     "automation"
   ],
   "license": "MIT",
-  "homepage": "TODO: Add homepage URL before npm publish",
+  "homepage": "https://gitlab.com/enreach/private/enreach-up/istra/n8n-modules/node-enreach",
   "author": {
     "name": "Enreach",
     "email": "marin.pavel@enreach.com"
   },
   "repository": {
     "type": "git",
-    "url": "TODO: Add repository URL before npm publish"
+    "url": "git+https://gitlab.com/enreach/private/enreach-up/istra/n8n-modules/node-enreach.git"
   },
   "bugs": {
-    "url": "TODO: Add issues URL before npm publish"
+    "url": "https://gitlab.com/enreach/private/enreach-up/istra/n8n-modules/node-enreach/-/issues"
   },
   "engines": {
     "node": ">=20.15"
