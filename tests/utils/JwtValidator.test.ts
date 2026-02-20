@@ -22,13 +22,14 @@ describe('JwtValidator', () => {
 	}
 
 	describe('validateJWT', () => {
-		it('should validate a valid JWT token without expiry', () => {
+		it('should reject a valid JWT token without expiry claim', () => {
 			const payload = { userId: '123', data: 'test' };
 			const token = createValidJWT(payload);
 
 			const result = JwtValidator.validateJWT(token, SECRET);
 
-			expect(result).toBe(true);
+			// SEC-02: exp claim is now required
+			expect(result).toBe(false);
 		});
 
 		it('should validate a valid JWT token with future expiry', () => {
@@ -105,24 +106,25 @@ describe('JwtValidator', () => {
 			expect(result).toBe(false);
 		});
 
-		it('should handle JWT with expiry exactly at current time', () => {
+		it('should accept JWT with expiry exactly at current time (within clock tolerance)', () => {
 			const currentTime = Math.floor(Date.now() / 1000);
 			const payload = { userId: '123', exp: currentTime };
 			const token = createValidJWT(payload);
 
 			const result = JwtValidator.validateJWT(token, SECRET);
 
-			// Token expires at current time, but is still valid (exp < now fails)
-			// This is correct behavior: token is not expired until exp < now
+			// exp <= now but within 30s clock tolerance, so still valid
 			expect(result).toBe(true);
 		});
 
-		it('should validate JWT with additional custom claims', () => {
+		it('should validate JWT with additional custom claims and exp', () => {
+			const futureTime = Math.floor(Date.now() / 1000) + 3600;
 			const payload = {
 				userId: '123',
 				role: 'admin',
 				permissions: ['read', 'write'],
 				metadata: { foo: 'bar' },
+				exp: futureTime,
 			};
 			const token = createValidJWT(payload);
 
@@ -206,7 +208,8 @@ describe('JwtValidator', () => {
 
 		it('should handle JWT with very long secret', () => {
 			const longSecret = 'a'.repeat(1000);
-			const payload = { userId: '123' };
+			const futureTime = Math.floor(Date.now() / 1000) + 3600;
+			const payload = { userId: '123', exp: futureTime };
 			const token = createValidJWT(payload, longSecret);
 
 			const result = JwtValidator.validateJWT(token, longSecret);
@@ -215,16 +218,89 @@ describe('JwtValidator', () => {
 		});
 
 		it('should handle JWT with unicode characters in payload', () => {
+			const futureTime = Math.floor(Date.now() / 1000) + 3600;
 			const payload = {
 				name: '日本語',
 				emoji: '🎉',
 				text: 'Héllo Wörld',
+				exp: futureTime,
 			};
 			const token = createValidJWT(payload);
 
 			const result = JwtValidator.validateJWT(token, SECRET);
 
 			expect(result).toBe(true);
+		});
+	});
+
+	describe('Security hardening', () => {
+		it('should reject JWT with alg:none header', () => {
+			const header = { alg: 'none', typ: 'JWT' };
+			const payload = { userId: '123', exp: Math.floor(Date.now() / 1000) + 3600 };
+			const headerEncoded = Buffer.from(JSON.stringify(header)).toString('base64url');
+			const payloadEncoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+			const token = `${headerEncoded}.${payloadEncoded}.`;
+
+			expect(JwtValidator.validateJWT(token, SECRET)).toBe(false);
+		});
+
+		it('should reject JWT with alg:RS256 header', () => {
+			const header = { alg: 'RS256', typ: 'JWT' };
+			const payload = { userId: '123', exp: Math.floor(Date.now() / 1000) + 3600 };
+			const headerEncoded = Buffer.from(JSON.stringify(header)).toString('base64url');
+			const payloadEncoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+			const signature = crypto
+				.createHmac('sha256', SECRET)
+				.update(`${headerEncoded}.${payloadEncoded}`)
+				.digest('base64url');
+			const token = `${headerEncoded}.${payloadEncoded}.${signature}`;
+
+			expect(JwtValidator.validateJWT(token, SECRET)).toBe(false);
+		});
+
+		it('should reject JWT with exp: 0 (epoch bypass)', () => {
+			const payload = { userId: '123', exp: 0 };
+			const token = createValidJWT(payload);
+
+			expect(JwtValidator.validateJWT(token, SECRET)).toBe(false);
+		});
+
+		it('should reject JWT without exp claim', () => {
+			const payload = { userId: '123', data: 'no-expiry' };
+			const token = createValidJWT(payload);
+
+			expect(JwtValidator.validateJWT(token, SECRET)).toBe(false);
+		});
+
+		it('should reject JWT with exp as string', () => {
+			const payload = { userId: '123', exp: 'not-a-number' };
+			const token = createValidJWT(payload);
+
+			expect(JwtValidator.validateJWT(token, SECRET)).toBe(false);
+		});
+
+		it('should accept JWT expired within clock tolerance (30s)', () => {
+			// Token expired 10 seconds ago -- within 30s tolerance
+			const recentPast = Math.floor(Date.now() / 1000) - 10;
+			const payload = { userId: '123', exp: recentPast };
+			const token = createValidJWT(payload);
+
+			expect(JwtValidator.validateJWT(token, SECRET)).toBe(true);
+		});
+
+		it('should reject JWT expired beyond clock tolerance', () => {
+			// Token expired 60 seconds ago -- beyond 30s tolerance
+			const pastTime = Math.floor(Date.now() / 1000) - 60;
+			const payload = { userId: '123', exp: pastTime };
+			const token = createValidJWT(payload);
+
+			expect(JwtValidator.validateJWT(token, SECRET)).toBe(false);
+		});
+
+		it('should reject oversized JWT tokens', () => {
+			const result = JwtValidator.validateJWT('a'.repeat(20000), SECRET);
+
+			expect(result).toBe(false);
 		});
 	});
 });

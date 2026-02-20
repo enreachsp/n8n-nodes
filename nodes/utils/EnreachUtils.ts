@@ -293,10 +293,8 @@ function extractMessageParameters(
     let callbackUrl: string = '';
     let jwt: string = '';
 
-    // Always try to get callbackUrl, regardless of auth method
-    const triggerNodeName = operation === 'sendAndWait'
-        ? executeFunctions.getNodeParameter('triggerNodeName', itemIndex, 'Enreach Trigger') as string
-        : 'Enreach Trigger';
+    // triggerNodeName is now shown for all operations
+    const triggerNodeName = executeFunctions.getNodeParameter('triggerNodeName', itemIndex, 'Enreach Trigger') as string;
 
     try {
         callbackUrl = executeFunctions.getNodeParameter('callbackUrl', itemIndex) as string;
@@ -386,14 +384,15 @@ async function processMessageCommon(
 }
 
 /**
- * Process message send and wait operation
+ * Process message send and wait operation.
+ * On first run: sends the message and calls putExecutionToWait().
+ * On resume (webhook fires): returns the webhook response data.
  */
 export async function processSendAndWait(
     executeFunctions: IExecuteFunctions,
-    items: INodeExecutionData[],
     itemIndex: number
 ): Promise<INodeExecutionData> {
-    // Process common logic
+    // Send message to Enreach, then wait for webhook resume
     const { sentData } = await processMessageCommon(
         executeFunctions,
         itemIndex,
@@ -403,13 +402,13 @@ export async function processSendAndWait(
     // Configure wait timeout
     const limitWaitTime = executeFunctions.getNodeParameter('limitWaitTime', itemIndex) as boolean;
     let waitTimeout: Date | undefined;
-    
+
     if (limitWaitTime) {
         const limitType = executeFunctions.getNodeParameter('limitType', itemIndex) as string;
         const dateTime = executeFunctions.getNodeParameter('dateTime', itemIndex, '') as string;
         const amount = executeFunctions.getNodeParameter('amount', itemIndex, 1) as number;
         const unit = executeFunctions.getNodeParameter('unit', itemIndex, 'hours') as string;
-        
+
         waitTimeout = calculateTimeout(limitWaitTime, limitType, dateTime, amount, unit);
     }
 
@@ -417,17 +416,16 @@ export async function processSendAndWait(
     let finalTimeout: Date;
 
     if (limitWaitTime && waitTimeout) {
-        // User configured timeout with -1s buffer for n8n processing overhead
         const adjustedTime = waitTimeout.getTime() - TIMEOUT_CONFIG.PROCESSING_BUFFER_MS;
         finalTimeout = new Date(Math.max(adjustedTime, Date.now() + TIMEOUT_CONFIG.MIN_TIMEOUT_MS));
     } else {
         // No timeout limit - wait up to 1 year for webhook response
         finalTimeout = new Date(Date.now() + TIMEOUT_CONFIG.DEFAULT_WAIT_YEARS * 365 * TIME_UNITS.days);
     }
-    
+
     await executeFunctions.putExecutionToWait(finalTimeout);
 
-    // This code will execute when the webhook resumes the execution
+    // After putExecutionToWait resolves (on webhook resume), capture webhook data
     const webhookData = executeFunctions.getInputData();
     if (webhookData && webhookData.length > 0) {
         sentData.webhookResponse = webhookData[0].json;
@@ -446,7 +444,6 @@ export async function processSendAndWait(
  */
 export async function processSendMessage(
     executeFunctions: IExecuteFunctions,
-    items: INodeExecutionData[],
     itemIndex: number
 ): Promise<INodeExecutionData> {
     // Process common logic
@@ -475,15 +472,14 @@ export async function handleWebhook(webhookFunctions: IWebhookFunctions, authMet
     const bodyData = webhookFunctions.getBodyData();
     const jwt = bodyData.jwt as string;
 
-    // Use provided authMethod, or detect from context
+    // Use provided authMethod, or detect from context -- fail-closed
     let finalAuthMethod = authMethod;
     if (!finalAuthMethod) {
-        // Try to get auth method from node parameters if available
         try {
             finalAuthMethod = webhookFunctions.getNodeParameter('authMethod') as string;
         } catch {
-            // Default to 'none' if can't determine auth method
-            finalAuthMethod = 'none';
+            // Fail-closed: require auth when method cannot be determined
+            finalAuthMethod = 'jwtAuth';
         }
     }
 

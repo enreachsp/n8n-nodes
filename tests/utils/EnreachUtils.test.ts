@@ -1,10 +1,14 @@
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, jest } from '@jest/globals';
 import {
 	calculateTimeout,
 	validateMessageParameters,
 	parseOptions,
 	buildMessageBody,
+	sendEnreachMessage,
+	handleWebhook,
+	processSendMessage,
 	EnreachOption,
+	EnreachMessageBody,
 } from '../../nodes/utils/EnreachUtils';
 import { MESSAGE_TYPES } from '../../nodes/utils/constants';
 
@@ -423,6 +427,171 @@ describe('EnreachUtils', () => {
 			);
 
 			expect(result.options).toEqual([]);
+		});
+	});
+
+	describe('sendEnreachMessage', () => {
+		function createMockExecuteFunctions(httpResponse: any = {}): any {
+			return {
+				helpers: {
+					httpRequest: jest.fn<any>().mockResolvedValue(httpResponse),
+				},
+			};
+		}
+
+		it('should send a POST request with the message body', async () => {
+			const mockExec = createMockExecuteFunctions({ success: true });
+			const messageBody: EnreachMessageBody = {
+				type: 'text',
+				text: 'Hello',
+				options: [],
+			};
+
+			const result = await sendEnreachMessage(mockExec, 'https://example.com/callback', messageBody);
+
+			expect(mockExec.helpers.httpRequest).toHaveBeenCalledWith({
+				method: 'POST',
+				url: 'https://example.com/callback',
+				body: messageBody,
+				json: true,
+				returnFullResponse: false,
+			});
+			expect(result).toEqual({ success: true });
+		});
+
+		it('should propagate HTTP errors', async () => {
+			const mockExec = createMockExecuteFunctions();
+			mockExec.helpers.httpRequest.mockRejectedValue(new Error('Network error'));
+
+			const messageBody: EnreachMessageBody = {
+				type: 'text',
+				text: 'Hello',
+				options: [],
+			};
+
+			await expect(
+				sendEnreachMessage(mockExec, 'https://example.com/callback', messageBody)
+			).rejects.toThrow('Network error');
+		});
+	});
+
+	describe('handleWebhook', () => {
+		const SECRET = 'test-secret-key-123';
+
+		function createValidJWT(payload: any, secret: string = SECRET): string {
+			const crypto = require('crypto');
+			const header = { alg: 'HS256', typ: 'JWT' };
+			const headerEncoded = Buffer.from(JSON.stringify(header)).toString('base64url');
+			const payloadEncoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+			const signature = crypto
+				.createHmac('sha256', secret)
+				.update(`${headerEncoded}.${payloadEncoded}`)
+				.digest('base64url');
+			return `${headerEncoded}.${payloadEncoded}.${signature}`;
+		}
+
+		function createMockWebhookFunctions(bodyData: any = {}, credentials: any = { jwtSecret: SECRET }): any {
+			return {
+				getBodyData: jest.fn<any>().mockReturnValue(bodyData),
+				getNodeParameter: jest.fn<any>().mockReturnValue('jwtAuth'),
+				getCredentials: jest.fn<any>().mockResolvedValue(credentials),
+			};
+		}
+
+		it('should return workflow data on valid JWT auth', async () => {
+			const futureTime = Math.floor(Date.now() / 1000) + 3600;
+			const jwt = createValidJWT({ userId: '123', exp: futureTime });
+			const bodyData = { jwt, message: 'hello' };
+			const mockFn = createMockWebhookFunctions(bodyData);
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expect(result.workflowData).toBeDefined();
+			expect(result.workflowData![0][0].json).toEqual(bodyData);
+		});
+
+		it('should return 401 when JWT is missing', async () => {
+			const mockFn = createMockWebhookFunctions({});
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expect(result.webhookResponse).toBeDefined();
+			const body = JSON.parse(result.webhookResponse!.body as string);
+			expect(body.error).toBe('Unauthorized');
+		});
+
+		it('should skip auth when authMethod is none', async () => {
+			const bodyData = { message: 'no auth needed' };
+			const mockFn = createMockWebhookFunctions(bodyData);
+
+			const result = await handleWebhook(mockFn, 'none');
+
+			expect(result.workflowData).toBeDefined();
+			expect(result.workflowData![0][0].json).toEqual(bodyData);
+		});
+
+		it('should fail-closed when authMethod is not provided', async () => {
+			const mockFn = createMockWebhookFunctions({});
+			mockFn.getNodeParameter.mockImplementation(() => { throw new Error('param not found'); });
+
+			const result = await handleWebhook(mockFn);
+
+			// Should default to jwtAuth and reject missing JWT
+			expect(result.webhookResponse).toBeDefined();
+		});
+	});
+
+	describe('processSendMessage', () => {
+		function createMockExecuteFunctions(params: Record<string, any>, httpResponse: any = {}): any {
+			return {
+				getNodeParameter: jest.fn<any>().mockImplementation(
+					(name: string, _index: number, defaultValue?: any) => {
+						if (name in params) return params[name];
+						if (defaultValue !== undefined) return defaultValue;
+						throw new Error(`Parameter "${name}" not found`);
+					},
+				),
+				evaluateExpression: jest.fn<any>().mockReturnValue('https://example.com/resume'),
+				helpers: {
+					httpRequest: jest.fn<any>().mockResolvedValue(httpResponse),
+				},
+			};
+		}
+
+		it('should send a text message and return simplified output', async () => {
+			const params: Record<string, any> = {
+				type: 'text',
+				text: 'Hello world',
+				authMethod: 'none',
+				triggerNodeName: 'Enreach Trigger',
+				callbackUrl: 'https://example.com/callback',
+			};
+			const mockExec = createMockExecuteFunctions(params, { ok: true });
+
+			const result = await processSendMessage(mockExec, 0);
+
+			expect(result.json).toHaveProperty('status', 'sent');
+			expect(result.json).toHaveProperty('type', 'text');
+			expect(result.json).toHaveProperty('text', 'Hello world');
+			expect(mockExec.helpers.httpRequest).toHaveBeenCalledTimes(1);
+		});
+
+		it('should send a button message with manual options', async () => {
+			const params: Record<string, any> = {
+				type: 'button',
+				text: 'Choose:',
+				authMethod: 'none',
+				triggerNodeName: 'Enreach Trigger',
+				callbackUrl: 'https://example.com/callback',
+				optionsInputMode: 'manual',
+				optionsManualButton: { fields: [{ id: '1', title: 'Yes' }, { id: '2', title: 'No' }] },
+			};
+			const mockExec = createMockExecuteFunctions(params, { ok: true });
+
+			const result = await processSendMessage(mockExec, 0);
+
+			expect(result.json).toHaveProperty('status', 'sent');
+			expect(result.json).toHaveProperty('type', 'button');
 		});
 	});
 });

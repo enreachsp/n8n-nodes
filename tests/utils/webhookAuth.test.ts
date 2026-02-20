@@ -156,7 +156,8 @@ describe('webhookAuth', () => {
 			});
 
 			it('should handle JWT with special characters', async () => {
-				const payload = { name: '日本語', emoji: '🎉' };
+				const futureTime = Math.floor(Date.now() / 1000) + 3600;
+				const payload = { name: '日本語', emoji: '🎉', exp: futureTime };
 				const token = createValidJWT(payload, SECRET);
 				const mockFunctions = createMockWebhookFunctions();
 

@@ -115,20 +115,19 @@ export class Enreach implements INodeType {
             },
 
 
-            // Trigger Node Name
+            // Trigger Node Name -- shown for all operations that need callbackUrl
             {
                 displayName: 'Trigger Node Name',
                 name: 'triggerNodeName',
                 type: 'string',
                 displayOptions: {
                     show: {
-                        operation: ['sendAndWait'],
-                        authMethod: ['jwtAuth'],
+                        operation: ['sendAndWait', 'sendMessage'],
                     },
                 },
                 default: 'Enreach Trigger',
                 placeholder: 'Enreach Trigger',
-                description: 'Name of the Enreach Trigger node to get data from',
+                description: 'Name of the Enreach Trigger node to get the callback URL and JWT from',
                 hint: 'Enter the exact name of the Enreach Trigger node in this workflow',
             },
 
@@ -173,7 +172,7 @@ export class Enreach implements INodeType {
                 displayName: 'JWT Token (Auto)',
                 name: 'jwt',
                 type: 'hidden',
-                default: '={{ $($parameter.triggerNodeName || "Enreach Trigger").item.json.jwt }}',
+                default: '={{ $($parameter.triggerNodeName).item.json.jwt }}',
                 displayOptions: {
                     show: {
                         operation: ['sendAndWait'],
@@ -185,7 +184,7 @@ export class Enreach implements INodeType {
                 displayName: 'Callback URL (Auto)',
                 name: 'callbackUrl',
                 type: 'hidden',
-                default: '={{ $($parameter.triggerNodeName || "Enreach Trigger").item.json.callbackUrl }}',
+                default: '={{ $($parameter.triggerNodeName).item.json.callbackUrl }}',
                 displayOptions: {
                     show: {
                         operation: ['sendAndWait', 'sendMessage'],
@@ -492,13 +491,13 @@ export class Enreach implements INodeType {
     };
 
     async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
-        // Get auth method from node parameters
+        // Get auth method from node parameters -- fail-closed: default to jwtAuth
         let authMethod: string;
         try {
             authMethod = this.getNodeParameter('authMethod') as string;
         } catch {
-            // Default to 'none' if parameter not found
-            authMethod = 'none';
+            // Fail-closed: require auth when parameter cannot be determined
+            authMethod = 'jwtAuth';
         }
         return handleWebhook(this, authMethod);
     }
@@ -507,17 +506,25 @@ export class Enreach implements INodeType {
         const items = this.getInputData();
         const operation = this.getNodeParameter('operation', 0) as string;
 
+        // ARCH-01: sendAndWait suspends the entire execution via putExecutionToWait(),
+        // so only the first item would ever be processed. Reject multi-item input early.
+        if (operation === 'sendAndWait' && items.length > 1) {
+            throw new ApplicationError(
+                'Send and Wait operation only supports a single input item. ' +
+                'Use a "Limit" node or "Split In Batches" to process one item at a time.',
+            );
+        }
+
         const returnData: INodeExecutionData[] = [];
-        const errorData: INodeExecutionData[] = [];
 
         for (let i = 0; i < items.length; i++) {
             try {
                 let result: INodeExecutionData;
 
                 if (operation === 'sendAndWait') {
-                    result = await processSendAndWait(this, items, i);
+                    result = await processSendAndWait(this, i);
                 } else if (operation === 'sendMessage') {
-                    result = await processSendMessage(this, items, i);
+                    result = await processSendMessage(this, i);
                 } else {
                     throw new ApplicationError(`The operation "${operation}" is not supported`);
                 }
@@ -525,27 +532,19 @@ export class Enreach implements INodeType {
                 returnData.push(result);
             } catch (error) {
                 if (this.continueOnFail()) {
-                    const errorItem = {
+                    returnData.push({
                         json: {
                             error: (error as Error).message,
-                            originalInput: items[i].json,
                             itemIndex: i,
                             status: 'error',
                             operation: operation,
                         },
                         pairedItem: { item: i },
-                    };
-
-                    errorData.push(errorItem);
+                    });
                 } else {
-                    // Stop workflow on error
                     throw error;
                 }
             }
-        }
-
-        if (errorData.length > 0) {
-            return [returnData, errorData];
         }
 
         return [returnData];
