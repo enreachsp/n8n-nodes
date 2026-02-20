@@ -12,17 +12,17 @@
     "automation"
   ],
   "license": "MIT",
-  "homepage": "https://gitlab.com/enreach/private/enreach-up/istra/n8n-modules/node-enreach/-/blob/main/README.md",
+  "homepage": "TODO: Add homepage URL before npm publish",
   "author": {
-    "name": "Marin Pavel",
+    "name": "Enreach",
     "email": "marin.pavel@enreach.com"
   },
   "repository": {
     "type": "git",
-    "url": "https://gitlab.com/enreach/private/enreach-up/istra/n8n-modules/node-enreach"
+    "url": "TODO: Add repository URL before npm publish"
   },
   "bugs": {
-    "url": "https://gitlab.com/enreach/private/enreach-up/istra/n8n-modules/node-enreach/-/issues"
+    "url": "TODO: Add issues URL before npm publish"
   },
   "engines": {
     "node": ">=20.15"
@@ -33,7 +33,10 @@
     "dev": "tsc --watch",
     "lint": "eslint nodes --ext .ts",
     "lintfix": "eslint nodes --ext .ts --fix",
-    "prepublishOnly": "npm run build"
+    "test": "jest --config tests/jest.config.js",
+    "test:watch": "jest --config tests/jest.config.js --watch",
+    "test:coverage": "jest --config tests/jest.config.js --coverage",
+    "prepublishOnly": "npm run build && npm run test"
   },
   "files": [
     "dist"
@@ -49,14 +52,18 @@
     ]
   },
   "devDependencies": {
+    "@jest/globals": "^30.2.0",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^8.46.1",
     "@typescript-eslint/parser": "^8.46.1",
     "eslint": "^8.0.0",
     "eslint-plugin-n8n-nodes-base": "^1.16.3",
     "gulp": "^5.0.0",
+    "jest": "^30.2.0",
     "merge-stream": "^2.0.0",
     "rimraf": "^5.0.0",
+    "ts-jest": "^29.4.5",
     "typescript": "^5.8.2"
   },
   "peerDependencies": {

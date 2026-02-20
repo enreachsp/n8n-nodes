@@ -1,6 +1,6 @@
 # n8n-nodes-enreach
 
-n8n community node for [Enreach](https://enreach.com) communication services.
+n8n community node for [Enreach UP](https://enreach.com) communication services.
 
 [n8n](https://n8n.io/) is a workflow automation platform.
 
@@ -18,7 +18,7 @@ npm install n8n-nodes-enreach
 
 ## Nodes
 
-### Enreach Trigger
+### Enreach UP Trigger
 
 Webhook trigger for receiving Enreach events.
 
@@ -26,9 +26,9 @@ Webhook trigger for receiving Enreach events.
 - Custom webhook path (use UUID for security)
 - JWT authentication (optional)
 
-### Enreach
+### Enreach UP
 
-Send messages through Enreach API.
+Send messages through Enreach UP API.
 
 **Operations:**
 - **Send and Wait** - Send message and wait for response
@@ -44,12 +44,12 @@ Send messages through Enreach API.
 
 ### 1. Setup Credentials
 
-Create **Enreach API** credentials with your JWT secret.
+Create **Enreach UP API** credentials with your JWT secret.
 
 ### 2. Basic Workflow
 
 ```
-[Enreach Trigger] → [Enreach: Send and Wait] → [Your Logic]
+[Enreach UP Trigger] → [Enreach UP: Send and Wait] → [Your Logic]
 ```
 
 ### 3. Example: Send List
@@ -118,4 +118,4 @@ MIT
 ## Resources
 
 - [n8n Community Nodes](https://docs.n8n.io/integrations/community-nodes/)
-- [Enreach Documentation](https://www.enreach.com/)
+- [Enreach UP Documentation](https://www.enreach.com/)

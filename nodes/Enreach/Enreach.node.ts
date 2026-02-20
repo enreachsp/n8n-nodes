@@ -21,7 +21,7 @@ export class Enreach implements INodeType {
         icon: 'file:enreach.svg',
         group: ['transform'],
         version: 1,
-        documentationUrl: 'https://www.enreach.com/',
+        documentationUrl: 'https://developer-staging.sp.enreach.com/guide/n8n-node-custom-enreach-/node/node-enreach-%28-send-message-and-send-and-wait-%29',
         subtitle: '={{$parameter["operation"]}}',
         description: 'Interact with Enreach API for message and communication workflows',
         defaults: {
