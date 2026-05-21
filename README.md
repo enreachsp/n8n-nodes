@@ -24,7 +24,7 @@ Webhook trigger for receiving Enreach events.
 
 **Configuration:**
 - Custom webhook path (use UUID for security)
-- JWT authentication (optional)
+- JWT authentication (optional) — token is read from the `X-Callback-Auth-Token` HTTP header (preferred) or from the `jwt` field in the request body (legacy)
 
 ### Enreach UP
 
@@ -110,6 +110,7 @@ Create **Enreach UP API** credentials with your JWT secret.
 **"JWT validation failed"?**
 - Verify JWT secret in credentials
 - Check token hasn't expired
+- Confirm the token is sent either in the `X-Callback-Auth-Token` header or in the request body's `jwt` field
 
 ## License
 

@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-enreach",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "n8n community node for Enreach communication services with webhook triggers and message operations",
   "keywords": [
     "n8n-community-node-package",

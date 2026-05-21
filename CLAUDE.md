@@ -51,6 +51,10 @@ npx jest tests/utils/JwtValidator.test.ts
 - Both JSON and manual mapping modes for button/list options. Manual mode uses `optionsManual` (list) and `optionsManualButton` (button) as separate fixedCollection parameters
 - Validation enforces limits: 1024 chars text, 20 chars button title, 256 chars option ID, 3-10 list options
 
+### JWT transport
+- **Incoming webhooks**: JWT is read from the `X-Callback-Auth-Token` header first (case-insensitive, trimmed), with fallback to `bodyData.jwt` for backward compatibility. The resolved JWT is then exposed on the workflow output as `json.jwt` so existing expressions keep working. See `extractIncomingJwt()` in `EnreachUtils.ts`.
+- **Outgoing requests** to `callbackUrl`: JWT is sent both as the `X-Callback-Auth-Token` header and inside the body (`messageBody.jwt`) — the body mirror is kept for backward compatibility during Enreach platform migration.
+
 ### Build Process
 The gulpfile copies icon files (SVG/PNG) from `nodes/` and `credentials/` to `dist/` maintaining folder structure. TypeScript compiles to `dist/`.
 

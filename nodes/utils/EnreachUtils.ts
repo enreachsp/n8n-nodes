@@ -247,10 +247,18 @@ export async function sendEnreachMessage(
     callbackUrl: string,
     messageBody: EnreachMessageBody,
 ): Promise<IDataObject> {
+    // Mirror the JWT into the X-Callback-Auth-Token header so Enreach can authenticate
+    // via header (new scheme) while body.jwt remains for backward compatibility
+    const headers: Record<string, string> = {};
+    if (messageBody.jwt) {
+        headers['X-Callback-Auth-Token'] = messageBody.jwt;
+    }
+
     const response = await executeFunctions.helpers.httpRequest({
         method: 'POST',
         url: callbackUrl,
         body: messageBody,
+        headers,
         json: true,
         returnFullResponse: false
     });
@@ -483,11 +491,37 @@ export async function processSendMessage(
 }
 
 /**
+ * Extract JWT from request: header X-Callback-Auth-Token takes priority over body.jwt
+ */
+function extractIncomingJwt(webhookFunctions: IWebhookFunctions, bodyData: IDataObject): string {
+    let headerJwt = '';
+    try {
+        const headers = webhookFunctions.getHeaderData() as Record<string, string | undefined> | undefined;
+        if (headers) {
+            // HTTP headers are case-insensitive; n8n typically lowercases them but check both for safety
+            const raw = headers['x-callback-auth-token'] ?? headers['X-Callback-Auth-Token'];
+            if (typeof raw === 'string') {
+                headerJwt = raw.trim();
+            }
+        }
+    } catch {
+        // Header retrieval failed -- fall back to body
+    }
+
+    if (headerJwt) {
+        return headerJwt;
+    }
+
+    const bodyJwt = bodyData.jwt;
+    return typeof bodyJwt === 'string' ? bodyJwt : '';
+}
+
+/**
  * Handle webhook response
  */
 export async function handleWebhook(webhookFunctions: IWebhookFunctions, authMethod?: string): Promise<IWebhookResponseData> {
     const bodyData = webhookFunctions.getBodyData();
-    const jwt = bodyData.jwt as string;
+    const jwt = extractIncomingJwt(webhookFunctions, bodyData);
 
     // Use provided authMethod, or detect from context -- fail-closed
     let finalAuthMethod = authMethod;
@@ -516,8 +550,11 @@ export async function handleWebhook(webhookFunctions: IWebhookFunctions, authMet
         };
     }
 
-    // Return the body data as workflow data
+    // Expose the resolved JWT under body.jwt so downstream expressions
+    // (e.g. $($parameter.triggerNodeName).item.json.jwt) work regardless of source
+    const workflowJson: IDataObject = jwt ? { ...bodyData, jwt } : bodyData;
+
     return {
-        workflowData: [[{ json: bodyData }]],
+        workflowData: [[{ json: workflowJson }]],
     };
 }

@@ -453,10 +453,42 @@ describe('EnreachUtils', () => {
 				method: 'POST',
 				url: 'https://example.com/callback',
 				body: messageBody,
+				headers: {},
 				json: true,
 				returnFullResponse: false,
 			});
 			expect(result).toEqual({ success: true });
+		});
+
+		it('should mirror JWT into X-Callback-Auth-Token header when present', async () => {
+			const mockExec = createMockExecuteFunctions({ success: true });
+			const messageBody: EnreachMessageBody = {
+				type: 'text',
+				text: 'Hello',
+				jwt: 'some.jwt.token',
+			};
+
+			await sendEnreachMessage(mockExec, 'https://example.com/callback', messageBody);
+
+			expect(mockExec.helpers.httpRequest).toHaveBeenCalledWith(
+				expect.objectContaining({
+					headers: { 'X-Callback-Auth-Token': 'some.jwt.token' },
+					body: messageBody,
+				}),
+			);
+		});
+
+		it('should not set X-Callback-Auth-Token header when JWT is absent', async () => {
+			const mockExec = createMockExecuteFunctions({ success: true });
+			const messageBody: EnreachMessageBody = {
+				type: 'text',
+				text: 'Hello',
+			};
+
+			await sendEnreachMessage(mockExec, 'https://example.com/callback', messageBody);
+
+			const callArgs = mockExec.helpers.httpRequest.mock.calls[0][0];
+			expect(callArgs.headers).toEqual({});
 		});
 
 		it('should propagate HTTP errors', async () => {
@@ -478,9 +510,14 @@ describe('EnreachUtils', () => {
 	describe('handleWebhook', () => {
 		const SECRET = 'test-secret-key-123';
 
-		function createMockWebhookFunctions(bodyData: any = {}, credentials: any = { jwtSecret: SECRET }): any {
+		function createMockWebhookFunctions(
+			bodyData: any = {},
+			credentials: any = { jwtSecret: SECRET },
+			headerData: any = {},
+		): any {
 			return {
 				getBodyData: jest.fn<any>().mockReturnValue(bodyData),
+				getHeaderData: jest.fn<any>().mockReturnValue(headerData),
 				getNodeParameter: jest.fn<any>().mockReturnValue('jwtAuth'),
 				getCredentials: jest.fn<any>().mockResolvedValue(credentials),
 			};
@@ -526,6 +563,89 @@ describe('EnreachUtils', () => {
 
 			// Should default to jwtAuth and reject missing JWT
 			expect(result.webhookResponse).toBeDefined();
+		});
+
+		it('should accept JWT from X-Callback-Auth-Token header (lowercase)', async () => {
+			const futureTime = Math.floor(Date.now() / 1000) + 3600;
+			const jwt = createValidJWT({ userId: '123', exp: futureTime }, SECRET);
+			const bodyData = { message: 'hello' };
+			const mockFn = createMockWebhookFunctions(bodyData, { jwtSecret: SECRET }, { 'x-callback-auth-token': jwt });
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expect(result.workflowData).toBeDefined();
+			expect((result.workflowData![0][0].json as any).jwt).toBe(jwt);
+			expect((result.workflowData![0][0].json as any).message).toBe('hello');
+		});
+
+		it('should accept JWT from X-Callback-Auth-Token header (original case)', async () => {
+			const futureTime = Math.floor(Date.now() / 1000) + 3600;
+			const jwt = createValidJWT({ userId: '123', exp: futureTime }, SECRET);
+			const bodyData = { message: 'hello' };
+			const mockFn = createMockWebhookFunctions(bodyData, { jwtSecret: SECRET }, { 'X-Callback-Auth-Token': jwt });
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expect(result.workflowData).toBeDefined();
+			expect((result.workflowData![0][0].json as any).jwt).toBe(jwt);
+		});
+
+		it('should prefer header JWT over body JWT when both are present', async () => {
+			const futureTime = Math.floor(Date.now() / 1000) + 3600;
+			const headerJwt = createValidJWT({ source: 'header', exp: futureTime }, SECRET);
+			const bodyJwt = createValidJWT({ source: 'body', exp: futureTime }, SECRET);
+			const bodyData = { jwt: bodyJwt, message: 'hello' };
+			const mockFn = createMockWebhookFunctions(bodyData, { jwtSecret: SECRET }, { 'x-callback-auth-token': headerJwt });
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expect(result.workflowData).toBeDefined();
+			expect((result.workflowData![0][0].json as any).jwt).toBe(headerJwt);
+		});
+
+		it('should reject 401 when both header and body JWT are missing', async () => {
+			const mockFn = createMockWebhookFunctions({ message: 'hello' }, { jwtSecret: SECRET }, {});
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expect(result.webhookResponse).toBeDefined();
+			const body = JSON.parse(result.webhookResponse!.body as string);
+			expect(body.error).toBe('Unauthorized');
+		});
+
+		it('should ignore whitespace-only header and fall back to body', async () => {
+			const futureTime = Math.floor(Date.now() / 1000) + 3600;
+			const bodyJwt = createValidJWT({ userId: '123', exp: futureTime }, SECRET);
+			const bodyData = { jwt: bodyJwt, message: 'hello' };
+			const mockFn = createMockWebhookFunctions(bodyData, { jwtSecret: SECRET }, { 'x-callback-auth-token': '   ' });
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expect(result.workflowData).toBeDefined();
+			expect((result.workflowData![0][0].json as any).jwt).toBe(bodyJwt);
+		});
+
+		it('should trim surrounding whitespace from header JWT', async () => {
+			const futureTime = Math.floor(Date.now() / 1000) + 3600;
+			const jwt = createValidJWT({ userId: '123', exp: futureTime }, SECRET);
+			const mockFn = createMockWebhookFunctions({}, { jwtSecret: SECRET }, { 'x-callback-auth-token': `  ${jwt}  ` });
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expect(result.workflowData).toBeDefined();
+			expect((result.workflowData![0][0].json as any).jwt).toBe(jwt);
+		});
+
+		it('should fall back to body when header value is not a string (e.g. duplicated by proxy)', async () => {
+			const futureTime = Math.floor(Date.now() / 1000) + 3600;
+			const bodyJwt = createValidJWT({ userId: '123', exp: futureTime }, SECRET);
+			const bodyData = { jwt: bodyJwt };
+			const mockFn = createMockWebhookFunctions(bodyData, { jwtSecret: SECRET }, { 'x-callback-auth-token': ['tok1', 'tok2'] });
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expect(result.workflowData).toBeDefined();
+			expect((result.workflowData![0][0].json as any).jwt).toBe(bodyJwt);
 		});
 	});
 
