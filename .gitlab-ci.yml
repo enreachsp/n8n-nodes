@@ -9,7 +9,7 @@ stages:
 
 build_node:
     stage: build
-    image: node:25.0.0
+    image: node:24.0.0-slim
     script:
         - su node -c "npm i && npm run build"
     artifacts:
