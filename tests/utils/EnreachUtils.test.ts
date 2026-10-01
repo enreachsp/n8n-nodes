@@ -1,3 +1,5 @@
+// Test doubles are partial stubs of n8n interfaces, so `any` is intentional here.
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, jest } from '@jest/globals';
 import {
 	calculateTimeout,
@@ -434,7 +436,7 @@ describe('EnreachUtils', () => {
 		function createMockExecuteFunctions(httpResponse: any = {}): any {
 			return {
 				helpers: {
-					httpRequest: jest.fn<any>().mockResolvedValue(httpResponse),
+					httpRequest: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(httpResponse),
 				},
 			};
 		}
@@ -508,7 +510,7 @@ describe('EnreachUtils', () => {
 	});
 
 	describe('handleWebhook', () => {
-		const SECRET = 'test-secret-key-123';
+		const SECRET = 'dummy-secret-key-123';
 
 		function createMockWebhookFunctions(
 			bodyData: any = {},
@@ -516,10 +518,10 @@ describe('EnreachUtils', () => {
 			headerData: any = {},
 		): any {
 			return {
-				getBodyData: jest.fn<any>().mockReturnValue(bodyData),
-				getHeaderData: jest.fn<any>().mockReturnValue(headerData),
-				getNodeParameter: jest.fn<any>().mockReturnValue('jwtAuth'),
-				getCredentials: jest.fn<any>().mockResolvedValue(credentials),
+				getBodyData: jest.fn<(...args: unknown[]) => unknown>().mockReturnValue(bodyData),
+				getHeaderData: jest.fn<(...args: unknown[]) => unknown>().mockReturnValue(headerData),
+				getNodeParameter: jest.fn<(...args: unknown[]) => unknown>().mockReturnValue('jwtAuth'),
+				getCredentials: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(credentials),
 			};
 		}
 
@@ -659,9 +661,9 @@ describe('EnreachUtils', () => {
 						throw new Error(`Parameter "${name}" not found`);
 					},
 				),
-				evaluateExpression: jest.fn<any>().mockReturnValue('https://example.com/resume'),
+				evaluateExpression: jest.fn<(...args: unknown[]) => unknown>().mockReturnValue('https://example.com/resume'),
 				helpers: {
-					httpRequest: jest.fn<any>().mockResolvedValue(httpResponse),
+					httpRequest: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(httpResponse),
 				},
 			};
 		}

@@ -1,10 +1,12 @@
+// Test doubles are partial stubs of n8n interfaces, so `any` is intentional here.
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import crypto from 'crypto';
 import { JwtValidator } from '../../nodes/utils/JwtValidator';
 import { createValidJWT } from '../helpers';
 
 describe('JwtValidator', () => {
-	const SECRET = 'test-secret-key-123';
+	const SECRET = 'dummy-secret-key-123';
 
 	// Convenience wrapper with default secret
 	const makeJWT = (payload: any, secret: string = SECRET): string => createValidJWT(payload, secret);

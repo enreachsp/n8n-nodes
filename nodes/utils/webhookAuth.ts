@@ -40,7 +40,7 @@ export async function validateWebhookAuth(
     let credentials;
     try {
         credentials = await webhookFunctions.getCredentials('enreachApi');
-    } catch (error) {
+    } catch {
         // Credentials not configured but JWT validation requested
         return {
             isValid: false,
@@ -69,7 +69,7 @@ export async function validateWebhookAuth(
         }
 
         return { isValid: true };
-    } catch (error) {
+    } catch {
         return {
             isValid: false,
             error: {

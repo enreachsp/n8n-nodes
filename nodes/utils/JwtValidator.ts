@@ -56,7 +56,7 @@ export class JwtValidator {
             }
 
             return true;
-        } catch (error) {
+        } catch {
             // JWT validation error
             return false;
         }

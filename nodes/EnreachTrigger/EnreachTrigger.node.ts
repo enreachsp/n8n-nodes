@@ -5,14 +5,16 @@ import {
 	INodeTypeDescription,
 	IWebhookResponseData,
 	ApplicationError,
+	NodeConnectionTypes,
 } from 'n8n-workflow';
 import { handleWebhook } from '../utils/EnreachUtils';
+import { enreachCredentialTest } from '../utils/credentialTest';
 
 export class EnreachTrigger implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Enreach Trigger',
 		name: 'enreachTrigger',
-		icon: 'file:enreach.svg',
+		icon: { light: 'file:enreach.svg', dark: 'file:enreach.dark.svg' },
 		group: ['trigger'],
 		version: 2,
 		documentationUrl: 'https://developer.sp.enreach.com/guide/n8n-node-custom-enreach-/node-trigger/node-enreach-%28-trigger-%29',
@@ -22,11 +24,12 @@ export class EnreachTrigger implements INodeType {
 			name: 'Enreach Trigger',
 		},
 		inputs: [],
-		outputs: ['main'],
+		outputs: [NodeConnectionTypes.Main],
 		credentials: [
 			{
 				name: 'enreachApi',
 				required: false,
+				testedBy: 'enreachCredentialTest',
 				displayOptions: {
 					show: {
 						authMethod: ['jwtAuth'],
@@ -75,6 +78,10 @@ export class EnreachTrigger implements INodeType {
 				required: true,
 			},
 		],
+	};
+
+	methods = {
+		credentialTest: { enreachCredentialTest },
 	};
 
 	webhookMethods = {
