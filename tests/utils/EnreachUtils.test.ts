@@ -646,12 +646,30 @@ describe('EnreachUtils', () => {
 		});
 
 		it('should reject an Authorization header without the Bearer scheme', async () => {
-			const authJwt = createValidJWT({ sub: 'istra', exp: futureTime() }, SECRET);
-			const mockFn = createMockWebhookFunctions({}, { jwtSecret: SECRET }, { authorization: authJwt });
+			for (const authorization of [
+				createValidJWT({ sub: 'istra', exp: futureTime() }, SECRET),
+				'Basic dXNlcjpwYXNz',
+				'Bearer two tokens',
+			]) {
+				const mockFn = createMockWebhookFunctions({}, { jwtSecret: SECRET }, { authorization });
 
-			const result = await handleWebhook(mockFn, 'jwtAuth');
+				const result = await handleWebhook(mockFn, 'jwtAuth');
 
-			expectRejected(result, mockFn);
+				expectRejected(result, mockFn);
+				expect(mockFn.response.json).toHaveBeenCalledWith({
+					error: 'Unauthorized',
+					message: 'Authorization header must use the Bearer scheme',
+				});
+				expect(mockFn.getCredentials).not.toHaveBeenCalled();
+			}
+		});
+
+		it('should ignore a non-Bearer Authorization header when authMethod is none', async () => {
+			const mockFn = createMockWebhookFunctions({ message: 'hi' }, undefined, { authorization: 'Basic dXNlcjpwYXNz' });
+
+			const result = await handleWebhook(mockFn, 'none');
+
+			expect(result.workflowData![0][0].json).toEqual({ message: 'hi' });
 		});
 
 		it('should reject a non-string Authorization header (e.g. duplicated by proxy)', async () => {
@@ -707,6 +725,16 @@ describe('EnreachUtils', () => {
 				const result = await handleWebhook(mockFn, 'jwtAuth');
 
 				expect((result.workflowData![0][0].json as any).jwt).toBe('header-token');
+			});
+
+			it('should drop a non-string body.jwt from the workflow output', async () => {
+				for (const bodyJwt of [{ a: 1 }, 42, null]) {
+					const mockFn = createMockWebhookFunctions({ jwt: bodyJwt, message: 'hello' }, { jwtSecret: SECRET }, authHeaders());
+
+					const result = await handleWebhook(mockFn, 'jwtAuth');
+
+					expect(result.workflowData![0][0].json).toEqual({ message: 'hello' });
+				}
 			});
 
 			it('should fall back to body.jwt when the header is blank or not a string', async () => {
@@ -824,6 +852,23 @@ describe('EnreachUtils', () => {
 			const request = mockExec.helpers.httpRequest.mock.calls[0][0];
 			expect(request.headers).toEqual({ 'X-Callback-Auth-Token': 'opaque-token' });
 			expect(request.body.jwt).toBe('opaque-token');
+		});
+
+		it('should ignore a non-string callback token', async () => {
+			const params: Record<string, any> = {
+				type: 'text',
+				text: 'Hello world',
+				triggerNodeName: 'Enreach Trigger',
+				callbackUrl: 'https://example.com/callback',
+				jwt: { a: 1 },
+			};
+			const mockExec = createMockExecuteFunctions(params, { ok: true });
+
+			await processSendMessage(mockExec, 0);
+
+			const request = mockExec.helpers.httpRequest.mock.calls[0][0];
+			expect(request.headers).toEqual({});
+			expect(request.body).not.toHaveProperty('jwt');
 		});
 
 		it('should send no callback token when the trigger received none', async () => {
