@@ -52,8 +52,9 @@ npx jest tests/utils/JwtValidator.test.ts
 - Validation enforces limits: 1024 chars text, 20 chars button title, 256 chars option ID, 3-10 list options
 
 ### JWT transport
-- **Incoming webhooks**: JWT is read from the `X-Callback-Auth-Token` header first (case-insensitive, trimmed), with fallback to `bodyData.jwt` for backward compatibility. The resolved JWT is then exposed on the workflow output as `json.jwt` so existing expressions keep working. See `extractIncomingJwt()` in `EnreachUtils.ts`.
-- **Outgoing requests** to `callbackUrl`: JWT is sent both as the `X-Callback-Auth-Token` header and inside the body (`messageBody.jwt`) — the body mirror is kept for backward compatibility during Enreach platform migration.
+- **Incoming webhooks**: Enreach authenticates with `Authorization: Bearer <JWT>` (scheme case-insensitive), validated with the credential secret (HS256, `exp` checked only when present). See `extractBearerToken()` in `EnreachUtils.ts`. Auth failures are written as a real HTTP 401 via `getResponseObject()` + `noWebhookResponse: true` (a `webhookResponse` would go out as 200).
+- **Callback token**: `X-Callback-Auth-Token` header, falling back to `bodyData.jwt`. It is signed with an Enreach platform key, so it must never be validated; it is only present when n8n has to call Enreach back. It is exposed on the workflow output as `json.jwt` (see `extractCallbackToken()`).
+- **Outgoing requests** to `callbackUrl` (Send and Wait and Send Message, whatever the auth method): the callback token is sent both as the `X-Callback-Auth-Token` header and inside the body (`messageBody.jwt`) — the body mirror is kept for backward compatibility during Enreach platform migration.
 
 ### Build Process
 The gulpfile copies icon files (SVG/PNG) from `nodes/` and `credentials/` to `dist/` maintaining folder structure. TypeScript compiles to `dist/`.

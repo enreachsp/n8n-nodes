@@ -31,30 +31,37 @@ export async function validateWebhookAuth(
             error: {
                 status: 401,
                 error: 'Unauthorized',
-                message: 'JWT token missing in request'
+                message: 'JWT token missing in Authorization header'
             }
         };
     }
 
-    // Get credentials
-    let credentials;
+    // Get the secret from the Enreach API credentials, or from n8n's built-in
+    // JWT Auth credentials still bound by workflows created with older node versions
+    let extractSecret: () => string;
     try {
-        credentials = await webhookFunctions.getCredentials('enreachApi');
-    } catch (error) {
-        // Credentials not configured but JWT validation requested
-        return {
-            isValid: false,
-            error: {
-                status: 401,
-                error: 'Unauthorized',
-                message: 'Enreach API credentials not configured'
-            }
-        };
+        const credentials = await webhookFunctions.getCredentials('enreachApi');
+        extractSecret = () => JwtValidator.extractEnreachSecret(credentials);
+    } catch {
+        try {
+            const credentials = await webhookFunctions.getCredentials('jwtAuth');
+            extractSecret = () => JwtValidator.extractJwtAuthSecret(credentials);
+        } catch {
+            // Credentials not configured but JWT validation requested
+            return {
+                isValid: false,
+                error: {
+                    status: 401,
+                    error: 'Unauthorized',
+                    message: 'Enreach API credentials not configured'
+                }
+            };
+        }
     }
 
     // Validate JWT
     try {
-        const jwtSecret = JwtValidator.extractEnreachSecret(credentials);
+        const jwtSecret = extractSecret();
         const isValid = JwtValidator.validateJWT(jwt, jwtSecret);
 
         if (!isValid) {

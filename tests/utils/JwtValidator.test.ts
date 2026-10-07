@@ -14,14 +14,14 @@ describe('JwtValidator', () => {
 	afterEach(() => { jest.useRealTimers(); });
 
 	describe('validateJWT', () => {
-		it('should reject a valid JWT token without expiry claim', () => {
-			const payload = { userId: '123', data: 'test' };
+		it('should accept a valid JWT token without expiry claim', () => {
+			const payload = { userId: '123', iat: 1516239022 };
 			const token = makeJWT(payload);
 
 			const result = JwtValidator.validateJWT(token, SECRET);
 
-			// SEC-02: exp claim is now required
-			expect(result).toBe(false);
+			// SEC-02: exp is optional, like n8n's native JWT Auth webhook
+			expect(result).toBe(true);
 		});
 
 		it('should validate a valid JWT token with future expiry', () => {
@@ -141,6 +141,32 @@ describe('JwtValidator', () => {
 		});
 	});
 
+	describe('extractJwtAuthSecret', () => {
+		it('should extract the passphrase secret from built-in JWT Auth credentials', () => {
+			const credentials = { keyType: 'passphrase', secret: 'my-secret-123', algorithm: 'HS256' };
+
+			expect(JwtValidator.extractJwtAuthSecret(credentials)).toBe('my-secret-123');
+		});
+
+		it('should default to the secret field when keyType is absent', () => {
+			expect(JwtValidator.extractJwtAuthSecret({ secret: 'my-secret-123' })).toBe('my-secret-123');
+		});
+
+		it('should reject PEM key credentials', () => {
+			const credentials = { keyType: 'pemKey', publicKey: '-----BEGIN PUBLIC KEY-----' };
+
+			expect(() => JwtValidator.extractJwtAuthSecret(credentials)).toThrow('Only passphrase JWT Auth credentials are supported (HS256)');
+		});
+
+		it('should reject an empty or whitespace-only secret', () => {
+			for (const secret of [undefined, '', '   ']) {
+				expect(() => JwtValidator.extractJwtAuthSecret({ keyType: 'passphrase', secret })).toThrow(
+					'Secret is not configured in JWT Auth credentials',
+				);
+			}
+		});
+	});
+
 	describe('extractEnreachSecret', () => {
 		it('should extract JWT secret from credentials', () => {
 			const credentials = { jwtSecret: 'my-secret-123' };
@@ -252,13 +278,6 @@ describe('JwtValidator', () => {
 
 		it('should reject JWT with exp: 0 (epoch bypass)', () => {
 			const payload = { userId: '123', exp: 0 };
-			const token = makeJWT(payload);
-
-			expect(JwtValidator.validateJWT(token, SECRET)).toBe(false);
-		});
-
-		it('should reject JWT without exp claim', () => {
-			const payload = { userId: '123', data: 'no-expiry' };
 			const token = makeJWT(payload);
 
 			expect(JwtValidator.validateJWT(token, SECRET)).toBe(false);
