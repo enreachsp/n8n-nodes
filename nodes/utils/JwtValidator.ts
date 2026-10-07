@@ -8,7 +8,7 @@ export class JwtValidator {
     private static readonly CLOCK_TOLERANCE_SECONDS = 30;
 
     /**
-     * Validate JWT token structure, algorithm, signature and expiry
+     * Validate JWT token structure, algorithm, signature and expiry (when present)
      */
     static validateJWT(token: string, secret: string): boolean {
         try {
@@ -43,11 +43,15 @@ export class JwtValidator {
                 return false;
             }
 
-            // SEC-02: Validate expiry -- exp claim is required
+            // SEC-02: Validate expiry when present, like n8n's native JWT Auth webhook
             const payloadData = JSON.parse(Buffer.from(payload, 'base64url').toString());
 
+            if (payloadData.exp === undefined) {
+                return true;
+            }
+
             if (typeof payloadData.exp !== 'number') {
-                return false; // Reject tokens without expiry
+                return false; // Reject malformed expiry
             }
 
             const now = Math.floor(Date.now() / 1000);

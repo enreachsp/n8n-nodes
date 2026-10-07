@@ -14,14 +14,14 @@ describe('JwtValidator', () => {
 	afterEach(() => { jest.useRealTimers(); });
 
 	describe('validateJWT', () => {
-		it('should reject a valid JWT token without expiry claim', () => {
-			const payload = { userId: '123', data: 'test' };
+		it('should accept a valid JWT token without expiry claim', () => {
+			const payload = { userId: '123', iat: 1516239022 };
 			const token = makeJWT(payload);
 
 			const result = JwtValidator.validateJWT(token, SECRET);
 
-			// SEC-02: exp claim is now required
-			expect(result).toBe(false);
+			// SEC-02: exp is optional, like n8n's native JWT Auth webhook
+			expect(result).toBe(true);
 		});
 
 		it('should validate a valid JWT token with future expiry', () => {
@@ -252,13 +252,6 @@ describe('JwtValidator', () => {
 
 		it('should reject JWT with exp: 0 (epoch bypass)', () => {
 			const payload = { userId: '123', exp: 0 };
-			const token = makeJWT(payload);
-
-			expect(JwtValidator.validateJWT(token, SECRET)).toBe(false);
-		});
-
-		it('should reject JWT without exp claim', () => {
-			const payload = { userId: '123', data: 'no-expiry' };
 			const token = makeJWT(payload);
 
 			expect(JwtValidator.validateJWT(token, SECRET)).toBe(false);

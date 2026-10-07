@@ -31,7 +31,7 @@ export async function validateWebhookAuth(
             error: {
                 status: 401,
                 error: 'Unauthorized',
-                message: 'JWT token missing in request'
+                message: 'JWT token missing in Authorization header'
             }
         };
     }

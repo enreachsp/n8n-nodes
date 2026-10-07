@@ -56,7 +56,7 @@ describe('webhookAuth', () => {
 				expect(result.error).toEqual({
 					status: 401,
 					error: 'Unauthorized',
-					message: 'JWT token missing in request',
+					message: 'JWT token missing in Authorization header',
 				});
 			});
 
@@ -66,7 +66,7 @@ describe('webhookAuth', () => {
 				const result = await validateWebhookAuth(mockFunctions, '', 'jwtAuth');
 
 				expect(result.isValid).toBe(false);
-				expect(result.error?.message).toBe('JWT token missing in request');
+				expect(result.error?.message).toBe('JWT token missing in Authorization header');
 			});
 
 			it('should reject when credentials are not configured', async () => {
@@ -137,7 +137,7 @@ describe('webhookAuth', () => {
 
 				// When authMethod is undefined, it should require JWT
 				expect(result.isValid).toBe(false);
-				expect(result.error?.message).toBe('JWT token missing in request');
+				expect(result.error?.message).toBe('JWT token missing in Authorization header');
 			});
 
 			it('should handle JWT with special characters', async () => {

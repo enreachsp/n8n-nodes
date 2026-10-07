@@ -58,7 +58,7 @@ export class EnreachTrigger implements INodeType {
 					{
 						name: 'JWT Auth',
 						value: 'jwtAuth',
-						description: 'Validate JWT token with configured secret',
+						description: 'Validate the JWT from the Authorization: Bearer header with the configured secret',
 					},
 				],
 				default: 'jwtAuth',
