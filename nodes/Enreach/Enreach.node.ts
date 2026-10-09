@@ -46,6 +46,17 @@ export class Enreach implements INodeType {
                     },
                 },
             },
+            // n8n's built-in JWT Auth, kept for workflows created with older node versions
+            {
+                name: 'jwtAuth',
+                required: false,
+                displayOptions: {
+                    show: {
+                        operation: ['sendAndWait'],
+                        authMethod: ['jwtAuth'],
+                    },
+                },
+            },
         ],
         webhooks: [
             {
@@ -102,7 +113,7 @@ export class Enreach implements INodeType {
                     {
                         name: 'JWT Auth',
                         value: 'jwtAuth',
-                        description: 'Validate JWT token with configured secret',
+                        description: 'Validate the JWT from the Authorization: Bearer header with the configured secret',
                     },
                 ],
                 default: 'jwtAuth',
@@ -164,14 +175,13 @@ export class Enreach implements INodeType {
 
             // Message Authentication - Hidden fields that get values from input data
             {
-                displayName: 'JWT Token (Auto)',
+                displayName: 'Callback Token (Auto)',
                 name: 'jwt',
                 type: 'hidden',
                 default: '={{ $($parameter.triggerNodeName).item.json.jwt }}',
                 displayOptions: {
                     show: {
-                        operation: ['sendAndWait'],
-                        authMethod: ['jwtAuth'],
+                        operation: ['sendAndWait', 'sendMessage'],
                     },
                 },
             },

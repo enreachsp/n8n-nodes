@@ -24,7 +24,8 @@ Webhook trigger for receiving Enreach events.
 
 **Configuration:**
 - Custom webhook path (use UUID for security)
-- JWT authentication (optional) — token is read from the `X-Callback-Auth-Token` HTTP header (preferred) or from the `jwt` field in the request body (legacy)
+- JWT authentication (optional) — Enreach authenticates with an `Authorization: Bearer <JWT>` header, validated (HS256) with the secret stored in the credentials
+- The callback token (`X-Callback-Auth-Token` header, or legacy `jwt` body field) is never validated: it is exposed as `json.jwt` and sent back to Enreach on calls to the callback URL
 
 ### Enreach UP
 
@@ -45,6 +46,8 @@ Send messages through Enreach UP API.
 ### 1. Setup Credentials
 
 Create **Enreach UP API** credentials with your JWT secret.
+
+Workflows created with node versions released before September 2025 use n8n's built-in **JWT Auth** credentials instead. They keep working without re-binding: when no Enreach UP API credentials are set, the secret is read from JWT Auth (key type **Passphrase**, algorithm HS256; PEM keys are not supported).
 
 ### 2. Basic Workflow
 
@@ -110,7 +113,7 @@ Create **Enreach UP API** credentials with your JWT secret.
 **"JWT validation failed"?**
 - Verify JWT secret in credentials
 - Check token hasn't expired
-- Confirm the token is sent either in the `X-Callback-Auth-Token` header or in the request body's `jwt` field
+- Confirm the token is sent in the `Authorization: Bearer <JWT>` header
 
 ## License
 

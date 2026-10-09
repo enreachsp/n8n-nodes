@@ -8,6 +8,7 @@ import {
 	buildMessageBody,
 	sendEnreachMessage,
 	handleWebhook,
+	processSendAndWait,
 	processSendMessage,
 	EnreachOption,
 	EnreachMessageBody,
@@ -511,50 +512,184 @@ describe('EnreachUtils', () => {
 
 	describe('handleWebhook', () => {
 		const SECRET = 'dummy-secret-key-123';
+		const futureTime = () => Math.floor(Date.now() / 1000) + 3600;
 
 		function createMockWebhookFunctions(
 			bodyData: any = {},
 			credentials: any = { jwtSecret: SECRET },
 			headerData: any = {},
 		): any {
+			const response: any = {};
+			response.status = jest.fn<any>().mockReturnValue(response);
+			response.json = jest.fn<any>().mockReturnValue(response);
 			return {
+				response,
 				getBodyData: jest.fn<(...args: unknown[]) => unknown>().mockReturnValue(bodyData),
 				getHeaderData: jest.fn<(...args: unknown[]) => unknown>().mockReturnValue(headerData),
 				getNodeParameter: jest.fn<(...args: unknown[]) => unknown>().mockReturnValue('jwtAuth'),
 				getCredentials: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(credentials),
+				getResponseObject: jest.fn<(...args: unknown[]) => unknown>().mockReturnValue(response),
 			};
 		}
 
-		it('should return workflow data on valid JWT auth', async () => {
-			const futureTime = Math.floor(Date.now() / 1000) + 3600;
-			const jwt = createValidJWT({ userId: '123', exp: futureTime }, SECRET);
-			const bodyData = { jwt, message: 'hello' };
-			const mockFn = createMockWebhookFunctions(bodyData);
+		function bearer(token: string): Record<string, string> {
+			return { authorization: `Bearer ${token}` };
+		}
+
+		function expectRejected(result: any, mockFn: any, status = 401): void {
+			expect(result).toEqual({ noWebhookResponse: true });
+			expect(mockFn.response.status).toHaveBeenCalledWith(status);
+			expect(mockFn.response.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }));
+		}
+
+		it('should return workflow data when the Authorization Bearer JWT is valid', async () => {
+			const authJwt = createValidJWT({ sub: 'istra', exp: futureTime() }, SECRET);
+			const bodyData = { message: 'hello' };
+			const mockFn = createMockWebhookFunctions(bodyData, { jwtSecret: SECRET }, bearer(authJwt));
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expect(result.workflowData![0][0].json).toEqual(bodyData);
+			expect(mockFn.getResponseObject).not.toHaveBeenCalled();
+		});
+
+		it('should accept a Bearer JWT without exp claim', async () => {
+			const authJwt = createValidJWT({ sub: 'istra', iat: 1516239022 }, SECRET);
+			const mockFn = createMockWebhookFunctions({}, { jwtSecret: SECRET }, bearer(authJwt));
 
 			const result = await handleWebhook(mockFn, 'jwtAuth');
 
 			expect(result.workflowData).toBeDefined();
-			expect(result.workflowData![0][0].json).toEqual(bodyData);
 		});
 
-		it('should return 401 when JWT is missing', async () => {
-			const mockFn = createMockWebhookFunctions({});
+		it('should accept a callback token signed with an unknown key when the Bearer is valid', async () => {
+			const authJwt = createValidJWT({ sub: 'istra', exp: futureTime() }, SECRET);
+			const callbackToken = createValidJWT({ sub: 'platform' }, 'internal-platform-key');
+			const mockFn = createMockWebhookFunctions(
+				{ message: 'hello' },
+				{ jwtSecret: SECRET },
+				{ ...bearer(authJwt), 'x-callback-auth-token': callbackToken },
+			);
 
 			const result = await handleWebhook(mockFn, 'jwtAuth');
 
-			expect(result.webhookResponse).toBeDefined();
-			const body = JSON.parse(result.webhookResponse!.body as string);
-			expect(body.error).toBe('Unauthorized');
+			expect((result.workflowData![0][0].json as any).jwt).toBe(callbackToken);
+			expect((result.workflowData![0][0].json as any).message).toBe('hello');
 		});
 
-		it('should skip auth when authMethod is none', async () => {
-			const bodyData = { message: 'no auth needed' };
-			const mockFn = createMockWebhookFunctions(bodyData);
+		it('should not expose the Bearer JWT in the workflow output', async () => {
+			const authJwt = createValidJWT({ sub: 'istra', exp: futureTime() }, SECRET);
+			const mockFn = createMockWebhookFunctions({ message: 'hello' }, { jwtSecret: SECRET }, bearer(authJwt));
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expect(result.workflowData![0][0].json).not.toHaveProperty('jwt');
+		});
+
+		it('should accept the Bearer scheme case-insensitively and trim the header', async () => {
+			const authJwt = createValidJWT({ sub: 'istra', exp: futureTime() }, SECRET);
+			const mockFn = createMockWebhookFunctions({}, { jwtSecret: SECRET }, { authorization: `  bearer ${authJwt}  ` });
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expect(result.workflowData).toBeDefined();
+		});
+
+		it('should read the Authorization header in its original case', async () => {
+			const authJwt = createValidJWT({ sub: 'istra', exp: futureTime() }, SECRET);
+			const mockFn = createMockWebhookFunctions({}, { jwtSecret: SECRET }, { Authorization: `Bearer ${authJwt}` });
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expect(result.workflowData).toBeDefined();
+		});
+
+		it('should reply a real HTTP 401 when the Authorization header is missing', async () => {
+			const mockFn = createMockWebhookFunctions({ message: 'hello' });
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expectRejected(result, mockFn);
+			expect(mockFn.response.json).toHaveBeenCalledWith({
+				error: 'Unauthorized',
+				message: 'JWT token missing in Authorization header',
+			});
+		});
+
+		it('should reject a body.jwt signed with the secret when no Bearer is sent', async () => {
+			const bodyJwt = createValidJWT({ sub: 'istra', exp: futureTime() }, SECRET);
+			const mockFn = createMockWebhookFunctions({ jwt: bodyJwt });
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expectRejected(result, mockFn);
+		});
+
+		it('should reject an X-Callback-Auth-Token used without Bearer', async () => {
+			const callbackJwt = createValidJWT({ sub: 'istra', exp: futureTime() }, SECRET);
+			const mockFn = createMockWebhookFunctions({}, { jwtSecret: SECRET }, { 'x-callback-auth-token': callbackJwt });
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expectRejected(result, mockFn);
+		});
+
+		it('should reject a Bearer JWT signed with another secret', async () => {
+			const authJwt = createValidJWT({ sub: 'istra', exp: futureTime() }, 'wrong-secret');
+			const mockFn = createMockWebhookFunctions({}, { jwtSecret: SECRET }, bearer(authJwt));
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expectRejected(result, mockFn);
+			expect(mockFn.response.json).toHaveBeenCalledWith({
+				error: 'Unauthorized',
+				message: 'Invalid or expired JWT token',
+			});
+		});
+
+		it('should reject an Authorization header without the Bearer scheme', async () => {
+			for (const authorization of [
+				createValidJWT({ sub: 'istra', exp: futureTime() }, SECRET),
+				'Basic dXNlcjpwYXNz',
+				'Bearer two tokens',
+			]) {
+				const mockFn = createMockWebhookFunctions({}, { jwtSecret: SECRET }, { authorization });
+
+				const result = await handleWebhook(mockFn, 'jwtAuth');
+
+				expectRejected(result, mockFn);
+				expect(mockFn.response.json).toHaveBeenCalledWith({
+					error: 'Unauthorized',
+					message: 'Authorization header must use the Bearer scheme',
+				});
+				expect(mockFn.getCredentials).not.toHaveBeenCalled();
+			}
+		});
+
+		it('should ignore a non-Bearer Authorization header when authMethod is none', async () => {
+			const mockFn = createMockWebhookFunctions({ message: 'hi' }, undefined, { authorization: 'Basic dXNlcjpwYXNz' });
 
 			const result = await handleWebhook(mockFn, 'none');
 
-			expect(result.workflowData).toBeDefined();
-			expect(result.workflowData![0][0].json).toEqual(bodyData);
+			expect(result.workflowData![0][0].json).toEqual({ message: 'hi' });
+		});
+
+		it('should reject a non-string Authorization header (e.g. duplicated by proxy)', async () => {
+			const authJwt = createValidJWT({ sub: 'istra', exp: futureTime() }, SECRET);
+			const mockFn = createMockWebhookFunctions({}, { jwtSecret: SECRET }, { authorization: [`Bearer ${authJwt}`] });
+
+			const result = await handleWebhook(mockFn, 'jwtAuth');
+
+			expectRejected(result, mockFn);
+		});
+
+		it('should skip auth when authMethod is none and still pass the callback token', async () => {
+			const bodyData = { message: 'no auth needed' };
+			const mockFn = createMockWebhookFunctions(bodyData, undefined, { 'x-callback-auth-token': 'opaque-token' });
+
+			const result = await handleWebhook(mockFn, 'none');
+
+			expect(result.workflowData![0][0].json).toEqual({ ...bodyData, jwt: 'opaque-token' });
 		});
 
 		it('should fail-closed when authMethod is not provided', async () => {
@@ -564,90 +699,90 @@ describe('EnreachUtils', () => {
 			const result = await handleWebhook(mockFn);
 
 			// Should default to jwtAuth and reject missing JWT
-			expect(result.webhookResponse).toBeDefined();
+			expectRejected(result, mockFn);
 		});
 
-		it('should accept JWT from X-Callback-Auth-Token header (lowercase)', async () => {
-			const futureTime = Math.floor(Date.now() / 1000) + 3600;
-			const jwt = createValidJWT({ userId: '123', exp: futureTime }, SECRET);
-			const bodyData = { message: 'hello' };
-			const mockFn = createMockWebhookFunctions(bodyData, { jwtSecret: SECRET }, { 'x-callback-auth-token': jwt });
+		describe('callback token passthrough', () => {
+			const authHeaders = () => bearer(createValidJWT({ sub: 'istra', exp: futureTime() }, SECRET));
 
-			const result = await handleWebhook(mockFn, 'jwtAuth');
+			it('should prefer X-Callback-Auth-Token header over body.jwt', async () => {
+				const mockFn = createMockWebhookFunctions(
+					{ jwt: 'body-token' },
+					{ jwtSecret: SECRET },
+					{ ...authHeaders(), 'x-callback-auth-token': 'header-token' },
+				);
 
-			expect(result.workflowData).toBeDefined();
-			expect((result.workflowData![0][0].json as any).jwt).toBe(jwt);
-			expect((result.workflowData![0][0].json as any).message).toBe('hello');
+				const result = await handleWebhook(mockFn, 'jwtAuth');
+
+				expect((result.workflowData![0][0].json as any).jwt).toBe('header-token');
+			});
+
+			it('should read X-Callback-Auth-Token in its original case and trim it', async () => {
+				const mockFn = createMockWebhookFunctions(
+					{},
+					{ jwtSecret: SECRET },
+					{ ...authHeaders(), 'X-Callback-Auth-Token': '  header-token  ' },
+				);
+
+				const result = await handleWebhook(mockFn, 'jwtAuth');
+
+				expect((result.workflowData![0][0].json as any).jwt).toBe('header-token');
+			});
+
+			it('should drop a non-string body.jwt from the workflow output', async () => {
+				for (const bodyJwt of [{ a: 1 }, 42, null]) {
+					const mockFn = createMockWebhookFunctions({ jwt: bodyJwt, message: 'hello' }, { jwtSecret: SECRET }, authHeaders());
+
+					const result = await handleWebhook(mockFn, 'jwtAuth');
+
+					expect(result.workflowData![0][0].json).toEqual({ message: 'hello' });
+				}
+			});
+
+			it('should fall back to body.jwt when the header is blank or not a string', async () => {
+				for (const headerValue of ['   ', ['tok1', 'tok2']]) {
+					const mockFn = createMockWebhookFunctions(
+						{ jwt: 'body-token' },
+						{ jwtSecret: SECRET },
+						{ ...authHeaders(), 'x-callback-auth-token': headerValue },
+					);
+
+					const result = await handleWebhook(mockFn, 'jwtAuth');
+
+					expect((result.workflowData![0][0].json as any).jwt).toBe('body-token');
+				}
+			});
 		});
+	});
 
-		it('should accept JWT from X-Callback-Auth-Token header (original case)', async () => {
-			const futureTime = Math.floor(Date.now() / 1000) + 3600;
-			const jwt = createValidJWT({ userId: '123', exp: futureTime }, SECRET);
-			const bodyData = { message: 'hello' };
-			const mockFn = createMockWebhookFunctions(bodyData, { jwtSecret: SECRET }, { 'X-Callback-Auth-Token': jwt });
+	describe('processSendAndWait', () => {
+		it('should send the callback token even when authMethod is none', async () => {
+			const params: Record<string, any> = {
+				type: 'text',
+				text: 'Hello',
+				authMethod: 'none',
+				triggerNodeName: 'Enreach Trigger',
+				callbackUrl: 'https://example.com/callback',
+				jwt: 'opaque-token',
+				limitWaitTime: false,
+			};
+			const mockExec: any = {
+				getNodeParameter: jest.fn<any>().mockImplementation(
+					(name: string, _index: number, defaultValue?: any) => (name in params ? params[name] : defaultValue),
+				),
+				evaluateExpression: jest.fn<any>().mockReturnValue('https://example.com/resume'),
+				putExecutionToWait: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(undefined),
+				getInputData: jest.fn<any>().mockReturnValue([]),
+				helpers: { httpRequest: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({ ok: true }) },
+			};
 
-			const result = await handleWebhook(mockFn, 'jwtAuth');
+			const result = await processSendAndWait(mockExec, 0);
 
-			expect(result.workflowData).toBeDefined();
-			expect((result.workflowData![0][0].json as any).jwt).toBe(jwt);
-		});
-
-		it('should prefer header JWT over body JWT when both are present', async () => {
-			const futureTime = Math.floor(Date.now() / 1000) + 3600;
-			const headerJwt = createValidJWT({ source: 'header', exp: futureTime }, SECRET);
-			const bodyJwt = createValidJWT({ source: 'body', exp: futureTime }, SECRET);
-			const bodyData = { jwt: bodyJwt, message: 'hello' };
-			const mockFn = createMockWebhookFunctions(bodyData, { jwtSecret: SECRET }, { 'x-callback-auth-token': headerJwt });
-
-			const result = await handleWebhook(mockFn, 'jwtAuth');
-
-			expect(result.workflowData).toBeDefined();
-			expect((result.workflowData![0][0].json as any).jwt).toBe(headerJwt);
-		});
-
-		it('should reject 401 when both header and body JWT are missing', async () => {
-			const mockFn = createMockWebhookFunctions({ message: 'hello' }, { jwtSecret: SECRET }, {});
-
-			const result = await handleWebhook(mockFn, 'jwtAuth');
-
-			expect(result.webhookResponse).toBeDefined();
-			const body = JSON.parse(result.webhookResponse!.body as string);
-			expect(body.error).toBe('Unauthorized');
-		});
-
-		it('should ignore whitespace-only header and fall back to body', async () => {
-			const futureTime = Math.floor(Date.now() / 1000) + 3600;
-			const bodyJwt = createValidJWT({ userId: '123', exp: futureTime }, SECRET);
-			const bodyData = { jwt: bodyJwt, message: 'hello' };
-			const mockFn = createMockWebhookFunctions(bodyData, { jwtSecret: SECRET }, { 'x-callback-auth-token': '   ' });
-
-			const result = await handleWebhook(mockFn, 'jwtAuth');
-
-			expect(result.workflowData).toBeDefined();
-			expect((result.workflowData![0][0].json as any).jwt).toBe(bodyJwt);
-		});
-
-		it('should trim surrounding whitespace from header JWT', async () => {
-			const futureTime = Math.floor(Date.now() / 1000) + 3600;
-			const jwt = createValidJWT({ userId: '123', exp: futureTime }, SECRET);
-			const mockFn = createMockWebhookFunctions({}, { jwtSecret: SECRET }, { 'x-callback-auth-token': `  ${jwt}  ` });
-
-			const result = await handleWebhook(mockFn, 'jwtAuth');
-
-			expect(result.workflowData).toBeDefined();
-			expect((result.workflowData![0][0].json as any).jwt).toBe(jwt);
-		});
-
-		it('should fall back to body when header value is not a string (e.g. duplicated by proxy)', async () => {
-			const futureTime = Math.floor(Date.now() / 1000) + 3600;
-			const bodyJwt = createValidJWT({ userId: '123', exp: futureTime }, SECRET);
-			const bodyData = { jwt: bodyJwt };
-			const mockFn = createMockWebhookFunctions(bodyData, { jwtSecret: SECRET }, { 'x-callback-auth-token': ['tok1', 'tok2'] });
-
-			const result = await handleWebhook(mockFn, 'jwtAuth');
-
-			expect(result.workflowData).toBeDefined();
-			expect((result.workflowData![0][0].json as any).jwt).toBe(bodyJwt);
+			const request = mockExec.helpers.httpRequest.mock.calls[0][0];
+			expect(request.headers).toEqual({ 'X-Callback-Auth-Token': 'opaque-token' });
+			expect(request.body.jwt).toBe('opaque-token');
+			expect(request.body.resumUrl).toBe('https://example.com/resume');
+			expect((result.json as any).sentRequest.body).not.toHaveProperty('jwt');
 		});
 	});
 
@@ -702,6 +837,56 @@ describe('EnreachUtils', () => {
 
 			expect(result.json).toHaveProperty('status', 'sent');
 			expect(result.json).toHaveProperty('type', 'button');
+		});
+
+		it('should send the callback token received by the trigger', async () => {
+			const params: Record<string, any> = {
+				type: 'text',
+				text: 'Hello world',
+				triggerNodeName: 'Enreach Trigger',
+				callbackUrl: 'https://example.com/callback',
+				jwt: 'opaque-token',
+			};
+			const mockExec = createMockExecuteFunctions(params, { ok: true });
+
+			await processSendMessage(mockExec, 0);
+
+			const request = mockExec.helpers.httpRequest.mock.calls[0][0];
+			expect(request.headers).toEqual({ 'X-Callback-Auth-Token': 'opaque-token' });
+			expect(request.body.jwt).toBe('opaque-token');
+		});
+
+		it('should ignore a non-string callback token', async () => {
+			const params: Record<string, any> = {
+				type: 'text',
+				text: 'Hello world',
+				triggerNodeName: 'Enreach Trigger',
+				callbackUrl: 'https://example.com/callback',
+				jwt: { a: 1 },
+			};
+			const mockExec = createMockExecuteFunctions(params, { ok: true });
+
+			await processSendMessage(mockExec, 0);
+
+			const request = mockExec.helpers.httpRequest.mock.calls[0][0];
+			expect(request.headers).toEqual({});
+			expect(request.body).not.toHaveProperty('jwt');
+		});
+
+		it('should send no callback token when the trigger received none', async () => {
+			const params: Record<string, any> = {
+				type: 'text',
+				text: 'Hello world',
+				triggerNodeName: 'Enreach Trigger',
+				callbackUrl: 'https://example.com/callback',
+			};
+			const mockExec = createMockExecuteFunctions(params, { ok: true });
+
+			await processSendMessage(mockExec, 0);
+
+			const request = mockExec.helpers.httpRequest.mock.calls[0][0];
+			expect(request.headers).toEqual({});
+			expect(request.body).not.toHaveProperty('jwt');
 		});
 	});
 });

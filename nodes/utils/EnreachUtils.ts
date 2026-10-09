@@ -312,10 +312,6 @@ function extractMessageParameters(
 } {
     const type = executeFunctions.getNodeParameter('type', itemIndex) as string;
     const text = executeFunctions.getNodeParameter('text', itemIndex) as string;
-    // For sendMessage, always use 'none' (no auth needed)
-    const authMethod = operation === 'sendMessage'
-        ? 'none'
-        : executeFunctions.getNodeParameter('authMethod', itemIndex, 'jwtAuth') as string;
 
     let callbackUrl: string = '';
     let jwt: string = '';
@@ -326,10 +322,9 @@ function extractMessageParameters(
     try {
         callbackUrl = executeFunctions.getNodeParameter('callbackUrl', itemIndex) as string;
 
-        // Only get JWT if auth method requires it
-        if (authMethod === 'jwtAuth') {
-            jwt = executeFunctions.getNodeParameter('jwt', itemIndex) as string;
-        }
+        // Callback token received by the trigger: Enreach requires it back whatever the auth method
+        const callbackToken = executeFunctions.getNodeParameter('jwt', itemIndex, '');
+        jwt = typeof callbackToken === 'string' ? callbackToken : '';
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         if (errorMessage.includes("doesn't exist") || errorMessage.includes("not found")) {
@@ -495,29 +490,54 @@ export async function processSendMessage(
 }
 
 /**
- * Extract JWT from request: header X-Callback-Auth-Token takes priority over body.jwt
+ * Read a header value from the webhook request (n8n lowercases header names)
  */
-function extractIncomingJwt(webhookFunctions: IWebhookFunctions, bodyData: IDataObject): string {
-    let headerJwt = '';
+function readHeader(webhookFunctions: IWebhookFunctions, name: string): string {
     try {
-        const headers = webhookFunctions.getHeaderData() as Record<string, string | undefined> | undefined;
-        if (headers) {
-            // HTTP headers are case-insensitive; n8n typically lowercases them but check both for safety
-            const raw = headers['x-callback-auth-token'] ?? headers['X-Callback-Auth-Token'];
-            if (typeof raw === 'string') {
-                headerJwt = raw.trim();
-            }
-        }
+        const headers = webhookFunctions.getHeaderData() as Record<string, unknown> | undefined;
+        const raw = headers?.[name.toLowerCase()] ?? headers?.[name];
+        return typeof raw === 'string' ? raw.trim() : '';
     } catch {
-        // Header retrieval failed -- fall back to body
+        return '';
+    }
+}
+
+/**
+ * Extract the JWT from an "Authorization: Bearer <JWT>" header value
+ */
+function extractBearerToken(authorizationHeader: string): string {
+    const match = /^Bearer\s+(\S+)$/i.exec(authorizationHeader);
+    return match ? match[1] : '';
+}
+
+/**
+ * Reject the webhook call with a real HTTP error status
+ * (a webhookResponse would be sent with HTTP 200)
+ */
+function rejectWebhook(
+    webhookFunctions: IWebhookFunctions,
+    error: { status: number; error: string; message: string },
+): IWebhookResponseData {
+    webhookFunctions.getResponseObject().status(error.status).json({
+        error: error.error,
+        message: error.message,
+    });
+    return { noWebhookResponse: true };
+}
+
+/**
+ * Extract the callback token Enreach expects back on calls to callbackUrl.
+ * It is opaque to n8n (signed with a platform key) and must never be validated here.
+ * Header X-Callback-Auth-Token takes priority over the legacy body.jwt field.
+ */
+function extractCallbackToken(webhookFunctions: IWebhookFunctions, bodyData: IDataObject): string {
+    const headerToken = readHeader(webhookFunctions, 'X-Callback-Auth-Token');
+    if (headerToken) {
+        return headerToken;
     }
 
-    if (headerJwt) {
-        return headerJwt;
-    }
-
-    const bodyJwt = bodyData.jwt;
-    return typeof bodyJwt === 'string' ? bodyJwt : '';
+    const bodyToken = bodyData.jwt;
+    return typeof bodyToken === 'string' ? bodyToken : '';
 }
 
 /**
@@ -525,7 +545,6 @@ function extractIncomingJwt(webhookFunctions: IWebhookFunctions, bodyData: IData
  */
 export async function handleWebhook(webhookFunctions: IWebhookFunctions, authMethod?: string): Promise<IWebhookResponseData> {
     const bodyData = webhookFunctions.getBodyData();
-    const jwt = extractIncomingJwt(webhookFunctions, bodyData);
 
     // Use provided authMethod, or detect from context -- fail-closed
     let finalAuthMethod = authMethod;
@@ -538,25 +557,35 @@ export async function handleWebhook(webhookFunctions: IWebhookFunctions, authMet
         }
     }
 
-    const authResult = await validateWebhookAuth(webhookFunctions, jwt, finalAuthMethod);
+    const authorizationHeader = readHeader(webhookFunctions, 'Authorization');
+    const bearerToken = extractBearerToken(authorizationHeader);
 
-    if (!authResult.isValid) {
-        const error = authResult.error ?? { status: 401, error: 'Unauthorized', message: 'Authentication failed' };
-        return {
-            webhookResponse: {
-                status: error.status,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    error: error.error,
-                    message: error.message
-                }),
-            },
-        };
+    if (finalAuthMethod !== 'none' && authorizationHeader && !bearerToken) {
+        return rejectWebhook(webhookFunctions, {
+            status: 401,
+            error: 'Unauthorized',
+            message: 'Authorization header must use the Bearer scheme',
+        });
     }
 
-    // Expose the resolved JWT under body.jwt so downstream expressions
-    // (e.g. $($parameter.triggerNodeName).item.json.jwt) work regardless of source
-    const workflowJson: IDataObject = jwt ? { ...bodyData, jwt } : bodyData;
+    const authResult = await validateWebhookAuth(webhookFunctions, bearerToken, finalAuthMethod);
+
+    if (!authResult.isValid) {
+        return rejectWebhook(
+            webhookFunctions,
+            authResult.error ?? { status: 401, error: 'Unauthorized', message: 'Authentication failed' },
+        );
+    }
+
+    // Expose the callback token under body.jwt so downstream expressions
+    // (e.g. $($parameter.triggerNodeName).item.json.jwt) work regardless of source.
+    // A non-string body.jwt is dropped so it never reaches the X-Callback-Auth-Token header.
+    const callbackToken = extractCallbackToken(webhookFunctions, bodyData);
+    const workflowJson: IDataObject = { ...bodyData };
+    delete workflowJson.jwt;
+    if (callbackToken) {
+        workflowJson.jwt = callbackToken;
+    }
 
     return {
         workflowData: [[{ json: workflowJson }]],
