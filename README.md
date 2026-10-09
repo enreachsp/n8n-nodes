@@ -47,8 +47,6 @@ Send messages through Enreach UP API.
 
 Create **Enreach UP API** credentials with your JWT secret.
 
-Workflows created with node versions released before September 2025 use n8n's built-in **JWT Auth** credentials instead. They keep working without re-binding: when no Enreach UP API credentials are set, the secret is read from JWT Auth (key type **Passphrase**, algorithm HS256; PEM keys are not supported).
-
 ### 2. Basic Workflow
 
 ```

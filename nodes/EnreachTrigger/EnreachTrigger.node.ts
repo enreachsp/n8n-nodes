@@ -36,16 +36,6 @@ export class EnreachTrigger implements INodeType {
 					},
 				},
 			},
-			// n8n's built-in JWT Auth, kept for workflows created with older node versions
-			{
-				name: 'jwtAuth',
-				required: false,
-				displayOptions: {
-					show: {
-						authMethod: ['jwtAuth'],
-					},
-				},
-			},
 		],
 		webhooks: [
 			{

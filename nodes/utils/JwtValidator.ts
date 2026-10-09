@@ -76,19 +76,4 @@ export class JwtValidator {
         }
         return secret;
     }
-
-    /**
-     * Extract the HS256 secret from n8n's built-in JWT Auth credentials,
-     * bound by workflows created with node versions released before September 2025
-     */
-    static extractJwtAuthSecret(credentials: IDataObject): string {
-        if (credentials.keyType === 'pemKey') {
-            throw new Error('Only passphrase JWT Auth credentials are supported (HS256)');
-        }
-        const secret = credentials.secret as string;
-        if (!secret || secret.trim() === '') {
-            throw new Error('Secret is not configured in JWT Auth credentials');
-        }
-        return secret;
-    }
 }

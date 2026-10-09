@@ -143,32 +143,6 @@ describe('JwtValidator', () => {
 		});
 	});
 
-	describe('extractJwtAuthSecret', () => {
-		it('should extract the passphrase secret from built-in JWT Auth credentials', () => {
-			const credentials = { keyType: 'passphrase', secret: 'my-secret-123', algorithm: 'HS256' };
-
-			expect(JwtValidator.extractJwtAuthSecret(credentials)).toBe('my-secret-123');
-		});
-
-		it('should default to the secret field when keyType is absent', () => {
-			expect(JwtValidator.extractJwtAuthSecret({ secret: 'my-secret-123' })).toBe('my-secret-123');
-		});
-
-		it('should reject PEM key credentials', () => {
-			const credentials = { keyType: 'pemKey', publicKey: '-----BEGIN PUBLIC KEY-----' };
-
-			expect(() => JwtValidator.extractJwtAuthSecret(credentials)).toThrow('Only passphrase JWT Auth credentials are supported (HS256)');
-		});
-
-		it('should reject an empty or whitespace-only secret', () => {
-			for (const secret of [undefined, '', '   ']) {
-				expect(() => JwtValidator.extractJwtAuthSecret({ keyType: 'passphrase', secret })).toThrow(
-					'Secret is not configured in JWT Auth credentials',
-				);
-			}
-		});
-	});
-
 	describe('extractEnreachSecret', () => {
 		it('should extract JWT secret from credentials', () => {
 			const credentials = { jwtSecret: 'my-secret-123' };
