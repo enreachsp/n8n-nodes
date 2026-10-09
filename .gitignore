@@ -36,3 +36,6 @@ temp/
 # Lock files (optional - depends on team preference)
 yarn.lock
 package-lock.json
+
+# Local assistant session data
+.remember/

@@ -8,27 +8,32 @@ n8n community node package for Enreach UP communication services. Provides webho
 
 ## Commands
 
+Package manager is pnpm. Build, lint and release go through `@n8n/node-cli` (`n8n-node`).
+
 ```bash
 # Build (TypeScript + copy icons)
-npm run build
+pnpm build
 
-# Development (watch mode)
-npm run dev
+# Run n8n locally with the node, rebuilding on changes
+pnpm dev
 
-# Lint (uses n8n-specific ESLint plugin rules)
-npm run lint
-npm run lintfix
+# Lint (n8n community-node rules, strict mode)
+pnpm lint
+pnpm lint:fix
 
 # Test
-npm run test
-npm run test:watch
-npm run test:coverage
+pnpm test
+pnpm test:watch
+pnpm test:coverage
 
 # Run single test file
-npx jest tests/utils/JwtValidator.test.ts
+pnpm exec jest --config tests/jest.config.js tests/utils/JwtValidator.test.ts
+
+# Release: bump version, changelog, tag and push (does not publish)
+pnpm release
 ```
 
-`prepublishOnly` runs both build and test before npm publish.
+Publishing to npm happens only in GitHub Actions (`.github/workflows/publish.yml`), on a version tag, with npm provenance. `prepublishOnly` blocks a direct `npm publish`.
 
 ## Architecture
 
@@ -57,7 +62,7 @@ npx jest tests/utils/JwtValidator.test.ts
 - **Outgoing requests** to `callbackUrl` (Send and Wait and Send Message, whatever the auth method): the callback token is sent both as the `X-Callback-Auth-Token` header and inside the body (`messageBody.jwt`) — the body mirror is kept for backward compatibility during Enreach platform migration.
 
 ### Build Process
-The gulpfile copies icon files (SVG/PNG) from `nodes/` and `credentials/` to `dist/` maintaining folder structure. TypeScript compiles to `dist/`.
+`n8n-node build` compiles TypeScript to `dist/` and copies static files (SVG/PNG icons) keeping the folder structure. Icons have a light and a dark variant (`enreach.svg`, `enreach.dark.svg`).
 
 ## Testing
 
@@ -65,12 +70,15 @@ Tests are in `tests/utils/` using Jest with ts-jest. The `@/` path alias maps to
 
 ## Linting
 
-ESLint uses `eslint-plugin-n8n-nodes-base` with three override blocks:
-- `package.json` → `plugin:n8n-nodes-base/community` rules
-- `credentials/**/*.ts` → `plugin:n8n-nodes-base/credentials` rules
-- `nodes/**/*.ts` → `plugin:n8n-nodes-base/nodes` rules
+`eslint.config.mjs` re-exports the default config from `@n8n/node-cli/eslint`. `package.json` sets `n8n.strict: true` (n8n Cloud eligibility), so `n8n-node lint` rejects any change to that config. The n8n scanner disallows inline `eslint-disable` in published code; test files may use it.
 
-These enforce n8n-specific conventions (param naming, descriptions, class structure). A separate `.eslintrc.prepublish.js` config exists for stricter pre-publish checks.
+### Verification constraints
+- No runtime `dependencies`. Imports limited to `n8n-workflow`, `crypto` and relative paths.
+- No `process.env` or file system access.
+- Throw `NodeOperationError`/`NodeApiError` inside `catch` blocks, never raw errors.
+- Credentials are tested through `testedBy: 'enreachCredentialTest'` on both nodes (`nodes/utils/credentialTest.ts`), since the JWT secret has no remote endpoint to call.
+- The action node declares no-op `webhookMethods`: its webhook is the Send and Wait resume URL (`restartWebhook`), which n8n never registers at activation.
+- See `docs/n8n-verification-checklist.md` for the full procedure and status.
 
 ## n8n Integration
 

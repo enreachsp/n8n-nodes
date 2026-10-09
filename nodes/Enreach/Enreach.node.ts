@@ -1,11 +1,13 @@
 import {
     IExecuteFunctions,
+    IHookFunctions,
     IWebhookFunctions,
     INodeType,
     INodeTypeDescription,
     INodeExecutionData,
     IWebhookResponseData,
     ApplicationError,
+    NodeConnectionTypes,
     NodeOperationError,
 } from 'n8n-workflow';
 
@@ -14,12 +16,13 @@ import {
     processSendMessage,
     handleWebhook,
 } from '../utils/EnreachUtils';
+import { enreachCredentialTest } from '../utils/credentialTest';
 
 export class Enreach implements INodeType {
     description: INodeTypeDescription = {
         displayName: 'Enreach',
         name: 'enreach',
-        icon: 'file:enreach.svg',
+        icon: { light: 'file:enreach.svg', dark: 'file:enreach.dark.svg' },
         group: ['transform'],
         version: 1,
         documentationUrl: 'https://developer.sp.enreach.com/guide/n8n-node-custom-enreach-/node/node-enreach-%28-send-message-and-send-and-wait-%29',
@@ -28,24 +31,14 @@ export class Enreach implements INodeType {
         defaults: {
             name: 'Enreach',
         },
-        inputs: ['main'],
-        outputs: ['main'],
+        inputs: [NodeConnectionTypes.Main],
+        outputs: [NodeConnectionTypes.Main],
         usableAsTool: true,
         credentials: [
             {
                 name: 'enreachApi',
                 required: false,
-                displayOptions: {
-                    show: {
-                        operation: ['sendAndWait'],
-                        authMethod: ['jwtAuth'],
-                    },
-                },
-            },
-            // n8n's built-in JWT Auth, kept for workflows created with older node versions
-            {
-                name: 'jwtAuth',
-                required: false,
+                testedBy: 'enreachCredentialTest',
                 displayOptions: {
                     show: {
                         operation: ['sendAndWait'],
@@ -491,6 +484,27 @@ export class Enreach implements INodeType {
         ],
     };
 
+    methods = {
+        credentialTest: { enreachCredentialTest },
+    };
+
+    // The webhook is the Send and Wait resume URL (restartWebhook), served by the
+    // execution itself. There is nothing to register on the Enreach side, so the
+    // lifecycle hooks are intentionally no-ops.
+    webhookMethods = {
+        default: {
+            async checkExists(this: IHookFunctions): Promise<boolean> {
+                return true;
+            },
+            async create(this: IHookFunctions): Promise<boolean> {
+                return true;
+            },
+            async delete(this: IHookFunctions): Promise<boolean> {
+                return true;
+            },
+        },
+    };
+
     async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
         // Get auth method from node parameters -- fail-closed: default to jwtAuth
         let authMethod: string;
@@ -543,7 +557,7 @@ export class Enreach implements INodeType {
                         pairedItem: { item: i },
                     });
                 } else {
-                    throw error;
+                    throw new NodeOperationError(this.getNode(), error as Error, { itemIndex: i });
                 }
             }
         }

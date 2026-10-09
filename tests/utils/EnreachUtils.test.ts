@@ -1,3 +1,5 @@
+// Test doubles are partial stubs of n8n interfaces, so `any` is intentional here.
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, jest } from '@jest/globals';
 import {
 	calculateTimeout,
@@ -435,7 +437,7 @@ describe('EnreachUtils', () => {
 		function createMockExecuteFunctions(httpResponse: any = {}): any {
 			return {
 				helpers: {
-					httpRequest: jest.fn<any>().mockResolvedValue(httpResponse),
+					httpRequest: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(httpResponse),
 				},
 			};
 		}
@@ -509,7 +511,7 @@ describe('EnreachUtils', () => {
 	});
 
 	describe('handleWebhook', () => {
-		const SECRET = 'test-secret-key-123';
+		const SECRET = 'dummy-secret-key-123';
 		const futureTime = () => Math.floor(Date.now() / 1000) + 3600;
 
 		function createMockWebhookFunctions(
@@ -522,11 +524,11 @@ describe('EnreachUtils', () => {
 			response.json = jest.fn<any>().mockReturnValue(response);
 			return {
 				response,
-				getBodyData: jest.fn<any>().mockReturnValue(bodyData),
-				getHeaderData: jest.fn<any>().mockReturnValue(headerData),
-				getNodeParameter: jest.fn<any>().mockReturnValue('jwtAuth'),
-				getCredentials: jest.fn<any>().mockResolvedValue(credentials),
-				getResponseObject: jest.fn<any>().mockReturnValue(response),
+				getBodyData: jest.fn<(...args: unknown[]) => unknown>().mockReturnValue(bodyData),
+				getHeaderData: jest.fn<(...args: unknown[]) => unknown>().mockReturnValue(headerData),
+				getNodeParameter: jest.fn<(...args: unknown[]) => unknown>().mockReturnValue('jwtAuth'),
+				getCredentials: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(credentials),
+				getResponseObject: jest.fn<(...args: unknown[]) => unknown>().mockReturnValue(response),
 			};
 		}
 
@@ -769,9 +771,9 @@ describe('EnreachUtils', () => {
 					(name: string, _index: number, defaultValue?: any) => (name in params ? params[name] : defaultValue),
 				),
 				evaluateExpression: jest.fn<any>().mockReturnValue('https://example.com/resume'),
-				putExecutionToWait: jest.fn<any>().mockResolvedValue(undefined),
+				putExecutionToWait: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(undefined),
 				getInputData: jest.fn<any>().mockReturnValue([]),
-				helpers: { httpRequest: jest.fn<any>().mockResolvedValue({ ok: true }) },
+				helpers: { httpRequest: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({ ok: true }) },
 			};
 
 			const result = await processSendAndWait(mockExec, 0);
@@ -794,9 +796,9 @@ describe('EnreachUtils', () => {
 						throw new Error(`Parameter "${name}" not found`);
 					},
 				),
-				evaluateExpression: jest.fn<any>().mockReturnValue('https://example.com/resume'),
+				evaluateExpression: jest.fn<(...args: unknown[]) => unknown>().mockReturnValue('https://example.com/resume'),
 				helpers: {
-					httpRequest: jest.fn<any>().mockResolvedValue(httpResponse),
+					httpRequest: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(httpResponse),
 				},
 			};
 		}

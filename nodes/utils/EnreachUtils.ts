@@ -4,6 +4,7 @@ import {
     IWebhookFunctions,
     IWebhookResponseData,
     IDataObject,
+    NodeOperationError,
 } from 'n8n-workflow';
 import { validateWebhookAuth } from './webhookAuth';
 import { ENREACH_LIMITS, TIMEOUT_CONFIG, TIME_UNITS, MESSAGE_TYPES } from './constants';
@@ -169,6 +170,7 @@ export function validateMessageParameters(
  */
 export function parseOptions(options: string | object | undefined, type: string, isManual: boolean = false): EnreachOption[] {
     let parsedOptions: EnreachOption[] = [];
+    let parseFailure: string | undefined;
     
     if (isManual && options) {
         // Handle manual mapping format from fixedCollection
@@ -186,8 +188,10 @@ export function parseOptions(options: string | object | undefined, type: string,
                 parsedOptions = options;
             }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Invalid JSON';
-            throw new Error(`Failed to parse options JSON: ${errorMessage}. Please provide valid JSON array.`);
+            parseFailure = error instanceof Error ? error.message : 'Invalid JSON';
+        }
+        if (parseFailure !== undefined) {
+            throw new Error(`Failed to parse options JSON: ${parseFailure}. Please provide valid JSON array.`);
         }
     }
 
@@ -331,7 +335,7 @@ function extractMessageParameters(
                 itemIndex
             );
         }
-        throw error;
+        throw new NodeOperationError(executeFunctions.getNode(), error as Error, { itemIndex });
     }
 
     const parsedOptions = extractAndParseOptions(executeFunctions, itemIndex, type);

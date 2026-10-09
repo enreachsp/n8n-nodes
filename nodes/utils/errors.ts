@@ -64,35 +64,35 @@ export function createUserFriendlyError(
 	details: Record<string, string | number | boolean | undefined>,
 	itemIndex?: number
 ): EnreachNodeError {
-	const messages: Record<EnreachErrorCode, (details: any) => string> = {
-		[EnreachErrorCode.VALIDATION_TEXT_TOO_LONG]: (d: any) =>
+	const messages: Record<EnreachErrorCode, (details: Record<string, unknown>) => string> = {
+		[EnreachErrorCode.VALIDATION_TEXT_TOO_LONG]: (d) =>
 			`Message text is too long (${d.length} characters). Maximum allowed: ${d.max} characters.`,
 
-		[EnreachErrorCode.VALIDATION_TITLE_TOO_LONG]: (d: any) =>
+		[EnreachErrorCode.VALIDATION_TITLE_TOO_LONG]: (d) =>
 			`Button title "${d.title}" is too long (${d.length} characters). Maximum allowed: ${d.max} characters.`,
 
-		[EnreachErrorCode.VALIDATION_INSUFFICIENT_OPTIONS]: (d: any) =>
+		[EnreachErrorCode.VALIDATION_INSUFFICIENT_OPTIONS]: (d) =>
 			`List requires at least ${d.min} options, but only ${d.current} provided.`,
 
-		[EnreachErrorCode.VALIDATION_TOO_MANY_OPTIONS]: (d: any) =>
+		[EnreachErrorCode.VALIDATION_TOO_MANY_OPTIONS]: (d) =>
 			`Too many options (${d.current}). Maximum allowed: ${d.max} options.`,
 
-		[EnreachErrorCode.CONFIG_MISSING_TRIGGER]: (d: any) =>
+		[EnreachErrorCode.CONFIG_MISSING_TRIGGER]: (d) =>
 			`Cannot find trigger node "${d.nodeName}". Please check the node name and ensure it exists in your workflow.`,
 
-		[EnreachErrorCode.VALIDATION_OPTION_ID_TOO_LONG]: (d: any) =>
+		[EnreachErrorCode.VALIDATION_OPTION_ID_TOO_LONG]: (d) =>
 			`Option ${d.index} ID is too long (${d.length} characters). Maximum allowed: ${d.max} characters.`,
 
-		[EnreachErrorCode.VALIDATION_OPTION_TITLE_TOO_LONG]: (d: any) =>
+		[EnreachErrorCode.VALIDATION_OPTION_TITLE_TOO_LONG]: (d) =>
 			`Option ${d.index} title is too long (${d.length} characters). Maximum allowed: ${d.max} characters.`,
 
-		[EnreachErrorCode.VALIDATION_INVALID_JSON]: (d: any) =>
+		[EnreachErrorCode.VALIDATION_INVALID_JSON]: (d) =>
 			`Failed to parse options JSON: ${d.error}. Please provide a valid JSON array.`,
 
-		[EnreachErrorCode.VALIDATION_INVALID_DATETIME]: (d: any) =>
+		[EnreachErrorCode.VALIDATION_INVALID_DATETIME]: (d) =>
 			`Invalid date/time value: "${d.value}". Please provide a valid date.`,
 
-		[EnreachErrorCode.VALIDATION_INVALID_TIME_UNIT]: (d: any) =>
+		[EnreachErrorCode.VALIDATION_INVALID_TIME_UNIT]: (d) =>
 			`Unknown time unit: "${d.unit}". Valid units: ${d.validUnits}.`,
 	};
 

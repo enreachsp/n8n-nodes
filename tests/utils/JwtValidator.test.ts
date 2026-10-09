@@ -1,10 +1,12 @@
+// Test doubles are partial stubs of n8n interfaces, so `any` is intentional here.
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import crypto from 'crypto';
 import { JwtValidator } from '../../nodes/utils/JwtValidator';
 import { createValidJWT } from '../helpers';
 
 describe('JwtValidator', () => {
-	const SECRET = 'test-secret-key-123';
+	const SECRET = 'dummy-secret-key-123';
 
 	// Convenience wrapper with default secret
 	const makeJWT = (payload: any, secret: string = SECRET): string => createValidJWT(payload, secret);
@@ -138,32 +140,6 @@ describe('JwtValidator', () => {
 			const result = JwtValidator.validateJWT(token, SECRET);
 
 			expect(result).toBe(false);
-		});
-	});
-
-	describe('extractJwtAuthSecret', () => {
-		it('should extract the passphrase secret from built-in JWT Auth credentials', () => {
-			const credentials = { keyType: 'passphrase', secret: 'my-secret-123', algorithm: 'HS256' };
-
-			expect(JwtValidator.extractJwtAuthSecret(credentials)).toBe('my-secret-123');
-		});
-
-		it('should default to the secret field when keyType is absent', () => {
-			expect(JwtValidator.extractJwtAuthSecret({ secret: 'my-secret-123' })).toBe('my-secret-123');
-		});
-
-		it('should reject PEM key credentials', () => {
-			const credentials = { keyType: 'pemKey', publicKey: '-----BEGIN PUBLIC KEY-----' };
-
-			expect(() => JwtValidator.extractJwtAuthSecret(credentials)).toThrow('Only passphrase JWT Auth credentials are supported (HS256)');
-		});
-
-		it('should reject an empty or whitespace-only secret', () => {
-			for (const secret of [undefined, '', '   ']) {
-				expect(() => JwtValidator.extractJwtAuthSecret({ keyType: 'passphrase', secret })).toThrow(
-					'Secret is not configured in JWT Auth credentials',
-				);
-			}
 		});
 	});
 

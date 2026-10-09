@@ -1,3 +1,5 @@
+// Test doubles are partial stubs of n8n interfaces, so `any` is intentional here.
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, jest } from '@jest/globals';
 import { EnreachErrorCode, EnreachNodeError, createUserFriendlyError } from '../../nodes/utils/errors';
 

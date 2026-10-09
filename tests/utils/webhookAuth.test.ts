@@ -1,3 +1,5 @@
+// Test doubles are partial stubs of n8n interfaces, so `any` is intentional here.
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, jest } from '@jest/globals';
 import { validateWebhookAuth } from '../../nodes/utils/webhookAuth';
 import { createValidJWT } from '../helpers';
@@ -186,77 +188,6 @@ describe('webhookAuth', () => {
 
 				expect(result.isValid).toBe(false);
 				expect(result.error).toBeDefined();
-			});
-		});
-
-		describe('Built-in JWT Auth credentials (older workflows)', () => {
-			const JWT_AUTH_SECRET = 'jwt-auth-secret';
-
-			const createMockWithCredentials = (byType: Record<string, any>) => ({
-				getCredentials: jest.fn(async (type: string) => {
-					if (!(type in byType)) {
-						throw new Error(`Node does not have any credentials set for "${type}"`);
-					}
-					return byType[type];
-				}),
-			}) as any;
-
-			it('should validate with the jwtAuth secret when no Enreach API credentials are set', async () => {
-				const token = createValidJWT({ sub: 'istra' }, JWT_AUTH_SECRET);
-				const mockFunctions = createMockWithCredentials({
-					jwtAuth: { keyType: 'passphrase', secret: JWT_AUTH_SECRET, algorithm: 'HS256' },
-				});
-
-				const result = await validateWebhookAuth(mockFunctions, token, 'jwtAuth');
-
-				expect(result.isValid).toBe(true);
-				expect(mockFunctions.getCredentials).toHaveBeenCalledWith('enreachApi');
-				expect(mockFunctions.getCredentials).toHaveBeenCalledWith('jwtAuth');
-			});
-
-			it('should prefer Enreach API credentials when both are set', async () => {
-				const token = createValidJWT({ sub: 'istra' }, SECRET);
-				const mockFunctions = createMockWithCredentials({
-					enreachApi: { jwtSecret: SECRET },
-					jwtAuth: { keyType: 'passphrase', secret: JWT_AUTH_SECRET },
-				});
-
-				const result = await validateWebhookAuth(mockFunctions, token, 'jwtAuth');
-
-				expect(result.isValid).toBe(true);
-				expect(mockFunctions.getCredentials).not.toHaveBeenCalledWith('jwtAuth');
-			});
-
-			it('should reject a token signed with another secret', async () => {
-				const token = createValidJWT({ sub: 'istra' }, 'other-secret');
-				const mockFunctions = createMockWithCredentials({
-					jwtAuth: { keyType: 'passphrase', secret: JWT_AUTH_SECRET },
-				});
-
-				const result = await validateWebhookAuth(mockFunctions, token, 'jwtAuth');
-
-				expect(result.error?.message).toBe('Invalid or expired JWT token');
-			});
-
-			it('should fail with a validation error for PEM key credentials', async () => {
-				const token = createValidJWT({ sub: 'istra' }, JWT_AUTH_SECRET);
-				const mockFunctions = createMockWithCredentials({
-					jwtAuth: { keyType: 'pemKey', publicKey: '-----BEGIN PUBLIC KEY-----' },
-				});
-
-				const result = await validateWebhookAuth(mockFunctions, token, 'jwtAuth');
-
-				expect(result.isValid).toBe(false);
-				expect(result.error?.message).toBe('JWT validation error');
-			});
-
-			it('should reject when neither credential type is set', async () => {
-				const token = createValidJWT({ sub: 'istra' }, SECRET);
-				const mockFunctions = createMockWithCredentials({});
-
-				const result = await validateWebhookAuth(mockFunctions, token, 'jwtAuth');
-
-				expect(result.error?.message).toBe('Enreach API credentials not configured');
 			});
 		});
 
