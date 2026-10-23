@@ -90,3 +90,12 @@ Also done: `.gitlab-ci.yml`, `Dockerfile`, `gulpfile.js`, `.eslintrc*`, `.npmign
 Note: locally, `pnpm lint` reports one error on `.remember/tmp/last-ndc.ts`, an untracked session file. It does not exist in CI.
 
 Next exact action: commit, push the branch, open the PR, check that `ci.yml` is green. Then configure the npm Trusted Publisher (owner `enreachsp`, repo `n8n-nodes`, workflow `publish.yml`) and release.
+
+## 5. Progress (2026-10-23)
+
+- 1.0.4 published from GitHub Actions with provenance. `pnpm dlx @n8n/scan-community-package n8n-nodes-enreach` passed.
+- Creator Portal submission rejected by the automatic vetting: "Missing credential test". The `credential-test-required` lint rule accepts `testedBy` on nodes, but the portal wants a `test` property on the credential class (starter kit example).
+- Fix (item 20): `EnreachApi` declares `test`, a GET on `https://n8n.eupcloud.io/webhook/testcredentials`. That Enreach n8n workflow always answers 200. The JWT secret is per customer and Enreach cannot check it, so the test only proves reachability. No `authenticate`: the secret is never sent. The now-dead `testedBy` wiring was removed (n8n uses the credential `test` first, `credentials-tester.service.ts`).
+- Open: `0.0.0-stage` is on npm without provenance (deprecate it). UX copy gaps (placeholders without "e.g.", "error"/"failed" in messages).
+
+Next exact action: merge the credential test PR, release 1.0.5 (`pnpm release`), check the Publish run and the scanner, resubmit on the Creator Portal.

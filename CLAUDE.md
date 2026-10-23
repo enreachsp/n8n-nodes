@@ -66,7 +66,7 @@ Publishing to npm happens only in GitHub Actions (`.github/workflows/publish.yml
 
 ## Testing
 
-Tests are in `tests/utils/` using Jest with ts-jest. The `@/` path alias maps to project root. Coverage threshold is 60% for branches, functions, lines, and statements. `.node.ts` files are excluded from coverage collection (only utilities and credentials are covered).
+Tests are in `tests/utils/` and `tests/credentials/` using Jest with ts-jest. The `@/` path alias maps to project root. Coverage threshold is 60% for branches, functions, lines, and statements. `.node.ts` files are excluded from coverage collection (only utilities and credentials are covered).
 
 ## Linting
 
@@ -76,7 +76,7 @@ Tests are in `tests/utils/` using Jest with ts-jest. The `@/` path alias maps to
 - No runtime `dependencies`. Imports limited to `n8n-workflow`, `crypto` and relative paths.
 - No `process.env` or file system access.
 - Throw `NodeOperationError`/`NodeApiError` inside `catch` blocks, never raw errors.
-- Credentials are tested through `testedBy: 'enreachCredentialTest'` on both nodes (`nodes/utils/credentialTest.ts`), since the JWT secret has no remote endpoint to call.
+- The credential declares `test` (GET `https://n8n.eupcloud.io/webhook/testcredentials`, which always answers 200): the n8n Creator Portal rejects `testedBy` on nodes. The JWT secret has no remote endpoint that can check it, so the test only proves reachability and sends no credential data. n8n picks the credential `test` before any node `testedBy`.
 - The action node declares no-op `webhookMethods`: its webhook is the Send and Wait resume URL (`restartWebhook`), which n8n never registers at activation.
 - See `docs/n8n-verification-checklist.md` for the full procedure and status.
 
