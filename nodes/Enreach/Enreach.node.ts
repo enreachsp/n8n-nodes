@@ -16,7 +16,6 @@ import {
     processSendMessage,
     handleWebhook,
 } from '../utils/EnreachUtils';
-import { enreachCredentialTest } from '../utils/credentialTest';
 
 export class Enreach implements INodeType {
     description: INodeTypeDescription = {
@@ -38,7 +37,6 @@ export class Enreach implements INodeType {
             {
                 name: 'enreachApi',
                 required: false,
-                testedBy: 'enreachCredentialTest',
                 displayOptions: {
                     show: {
                         operation: ['sendAndWait'],
@@ -482,10 +480,6 @@ export class Enreach implements INodeType {
                 description: 'The date and time to wait until',
             },
         ],
-    };
-
-    methods = {
-        credentialTest: { enreachCredentialTest },
     };
 
     // The webhook is the Send and Wait resume URL (restartWebhook), served by the

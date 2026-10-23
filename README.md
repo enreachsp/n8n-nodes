@@ -47,6 +47,8 @@ Send messages through Enreach UP API.
 
 Create **Enreach UP API** credentials with your JWT secret.
 
+Saving the credentials runs a connection test that only checks that the Enreach test endpoint is reachable. The test does not send or verify the secret: the secret is checked when the first webhook arrives.
+
 ### 2. Basic Workflow
 
 ```
