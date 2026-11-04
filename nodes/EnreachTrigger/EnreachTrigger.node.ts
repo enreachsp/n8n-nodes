@@ -8,6 +8,7 @@ import {
 	NodeConnectionTypes,
 } from 'n8n-workflow';
 import { handleWebhook } from '../utils/EnreachUtils';
+import { enreachCredentialTest } from '../utils/credentialTest';
 
 export class EnreachTrigger implements INodeType {
 	description: INodeTypeDescription = {
@@ -28,6 +29,7 @@ export class EnreachTrigger implements INodeType {
 			{
 				name: 'enreachApi',
 				required: false,
+				testedBy: 'enreachCredentialTest',
 				displayOptions: {
 					show: {
 						authMethod: ['jwtAuth'],
@@ -76,6 +78,10 @@ export class EnreachTrigger implements INodeType {
 				required: true,
 			},
 		],
+	};
+
+	methods = {
+		credentialTest: { enreachCredentialTest },
 	};
 
 	webhookMethods = {
