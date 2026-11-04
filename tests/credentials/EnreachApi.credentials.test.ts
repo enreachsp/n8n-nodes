@@ -5,16 +5,13 @@ import { EnreachApi } from '../../credentials/EnreachApi.credentials';
 describe('EnreachApi credentials', () => {
 	const credentials: ICredentialType = new EnreachApi();
 
-	it('tests the credential with a GET on the Enreach check endpoint', () => {
-		expect(credentials.test?.request).toEqual({
-			baseURL: 'https://n8n.eupcloud.io',
-			url: '/webhook/testcredentials',
-			method: 'GET',
-		});
+	// The secret only validates incoming webhooks: it is checked locally by the
+	// Enreach Trigger (testedBy), never by a request to an external endpoint
+	it('declares no HTTP credential test', () => {
+		expect(credentials.test).toBeUndefined();
 	});
 
-	it('never sends the JWT secret during the test', () => {
+	it('never sends the JWT secret in outgoing requests', () => {
 		expect(credentials.authenticate).toBeUndefined();
-		expect(JSON.stringify(credentials.test)).not.toContain('$credentials');
 	});
 });

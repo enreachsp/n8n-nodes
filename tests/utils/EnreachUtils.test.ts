@@ -2,13 +2,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, jest } from '@jest/globals';
 import {
-	calculateTimeout,
 	validateMessageParameters,
 	parseOptions,
 	buildMessageBody,
 	sendEnreachMessage,
 	handleWebhook,
-	processSendAndWait,
 	processSendMessage,
 	EnreachOption,
 	EnreachMessageBody,
@@ -17,84 +15,6 @@ import { MESSAGE_TYPES } from '../../nodes/utils/constants';
 import { createValidJWT } from '../helpers';
 
 describe('EnreachUtils', () => {
-	describe('calculateTimeout', () => {
-		it('should return undefined when limitWaitTime is false', () => {
-			const result = calculateTimeout(false, 'timeInterval', '', 1, 'hours');
-
-			expect(result).toBeUndefined();
-		});
-
-		it('should calculate timeout for timeInterval in seconds', () => {
-			const result = calculateTimeout(true, 'timeInterval', '', 30, 'seconds');
-
-			expect(result).toBeInstanceOf(Date);
-			const diffMs = result!.getTime() - Date.now();
-			expect(diffMs).toBeGreaterThan(29000); // At least 29 seconds
-			expect(diffMs).toBeLessThan(31000); // At most 31 seconds
-		});
-
-		it('should calculate timeout for timeInterval in minutes', () => {
-			const result = calculateTimeout(true, 'timeInterval', '', 5, 'minutes');
-
-			expect(result).toBeInstanceOf(Date);
-			const diffMs = result!.getTime() - Date.now();
-			expect(diffMs).toBeGreaterThan(4 * 60 * 1000); // At least 4 minutes
-			expect(diffMs).toBeLessThan(6 * 60 * 1000); // At most 6 minutes
-		});
-
-		it('should calculate timeout for timeInterval in hours', () => {
-			const result = calculateTimeout(true, 'timeInterval', '', 2, 'hours');
-
-			expect(result).toBeInstanceOf(Date);
-			const diffMs = result!.getTime() - Date.now();
-			expect(diffMs).toBeGreaterThan(1.9 * 60 * 60 * 1000);
-			expect(diffMs).toBeLessThan(2.1 * 60 * 60 * 1000);
-		});
-
-		it('should calculate timeout for timeInterval in days', () => {
-			const result = calculateTimeout(true, 'timeInterval', '', 1, 'days');
-
-			expect(result).toBeInstanceOf(Date);
-			const diffMs = result!.getTime() - Date.now();
-			expect(diffMs).toBeGreaterThan(23 * 60 * 60 * 1000);
-			expect(diffMs).toBeLessThan(25 * 60 * 60 * 1000);
-		});
-
-		it('should parse and return date for dateTime type', () => {
-			const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1000); // Tomorrow
-			const dateString = futureDate.toISOString();
-
-			const result = calculateTimeout(true, 'dateTime', dateString, 0, '');
-
-			expect(result).toBeInstanceOf(Date);
-			expect(result!.getTime()).toBe(futureDate.getTime());
-		});
-
-		it('should throw error for invalid dateTime string', () => {
-			expect(() => {
-				calculateTimeout(true, 'dateTime', 'invalid-date', 0, '');
-			}).toThrow('Invalid date/time value');
-		});
-
-		it('should handle zero amount for timeInterval', () => {
-			const result = calculateTimeout(true, 'timeInterval', '', 0, 'hours');
-
-			expect(result).toBeInstanceOf(Date);
-			const diffMs = result!.getTime() - Date.now();
-			expect(diffMs).toBeLessThan(1000); // Should be very close to now
-		});
-
-		it('should handle large amounts correctly', () => {
-			const result = calculateTimeout(true, 'timeInterval', '', 365, 'days');
-
-			expect(result).toBeInstanceOf(Date);
-			const diffMs = result!.getTime() - Date.now();
-			const expectedMs = 365 * 24 * 60 * 60 * 1000;
-			expect(diffMs).toBeGreaterThan(expectedMs * 0.99);
-			expect(diffMs).toBeLessThan(expectedMs * 1.01);
-		});
-	});
-
 	describe('validateMessageParameters', () => {
 		const validOptions: EnreachOption[] = [
 			{ id: '1', title: 'Option 1', description: 'First' },
@@ -331,7 +251,6 @@ describe('EnreachUtils', () => {
 				'Choose an option',
 				options,
 				'Select',
-				'https://example.com/resume'
 			);
 
 			expect(result).toEqual({
@@ -340,7 +259,6 @@ describe('EnreachUtils', () => {
 				options: options,
 				jwt: 'test-jwt-token',
 				buttonTitle: 'Select',
-				resumUrl: 'https://example.com/resume',
 			});
 		});
 
@@ -356,7 +274,6 @@ describe('EnreachUtils', () => {
 				'Do you agree?',
 				buttonOptions,
 				undefined,
-				'https://example.com/resume'
 			);
 
 			expect(result).toEqual({
@@ -364,7 +281,6 @@ describe('EnreachUtils', () => {
 				text: 'Do you agree?',
 				options: buttonOptions,
 				jwt: 'test-jwt-token',
-				resumUrl: 'https://example.com/resume',
 			});
 			expect(result.buttonTitle).toBeUndefined();
 		});
@@ -376,7 +292,6 @@ describe('EnreachUtils', () => {
 				'Hello world',
 				[],
 				undefined,
-				undefined
 			);
 
 			expect(result).toEqual({
@@ -385,17 +300,15 @@ describe('EnreachUtils', () => {
 			});
 			expect(result.jwt).toBeUndefined();
 			expect(result.options).toBeUndefined();
-			expect(result.resumUrl).toBeUndefined();
 		});
 
-		it('should build message body without resumUrl when not provided', () => {
+		it('should build message body for text type with JWT', () => {
 			const result = buildMessageBody(
 				MESSAGE_TYPES.TEXT,
 				'test-jwt-token',
 				'Hello world',
 				[],
 				undefined,
-				undefined
 			);
 
 			expect(result).toEqual({
@@ -403,7 +316,6 @@ describe('EnreachUtils', () => {
 				text: 'Hello world',
 				jwt: 'test-jwt-token',
 			});
-			expect(result.resumUrl).toBeUndefined();
 		});
 
 		it('should include buttonTitle only for list type', () => {
@@ -413,7 +325,6 @@ describe('EnreachUtils', () => {
 				'Text',
 				options,
 				'Should be ignored',
-				undefined
 			);
 
 			expect(result.buttonTitle).toBeUndefined();
@@ -426,7 +337,6 @@ describe('EnreachUtils', () => {
 				'Text message',
 				[],
 				undefined,
-				undefined
 			);
 
 			expect(result.options).toBeUndefined();
@@ -755,37 +665,6 @@ describe('EnreachUtils', () => {
 		});
 	});
 
-	describe('processSendAndWait', () => {
-		it('should send the callback token even when authMethod is none', async () => {
-			const params: Record<string, any> = {
-				type: 'text',
-				text: 'Hello',
-				authMethod: 'none',
-				triggerNodeName: 'Enreach Trigger',
-				callbackUrl: 'https://example.com/callback',
-				jwt: 'opaque-token',
-				limitWaitTime: false,
-			};
-			const mockExec: any = {
-				getNodeParameter: jest.fn<any>().mockImplementation(
-					(name: string, _index: number, defaultValue?: any) => (name in params ? params[name] : defaultValue),
-				),
-				evaluateExpression: jest.fn<any>().mockReturnValue('https://example.com/resume'),
-				putExecutionToWait: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(undefined),
-				getInputData: jest.fn<any>().mockReturnValue([]),
-				helpers: { httpRequest: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({ ok: true }) },
-			};
-
-			const result = await processSendAndWait(mockExec, 0);
-
-			const request = mockExec.helpers.httpRequest.mock.calls[0][0];
-			expect(request.headers).toEqual({ 'X-Callback-Auth-Token': 'opaque-token' });
-			expect(request.body.jwt).toBe('opaque-token');
-			expect(request.body.resumUrl).toBe('https://example.com/resume');
-			expect((result.json as any).sentRequest.body).not.toHaveProperty('jwt');
-		});
-	});
-
 	describe('processSendMessage', () => {
 		function createMockExecuteFunctions(params: Record<string, any>, httpResponse: any = {}): any {
 			return {
@@ -796,7 +675,6 @@ describe('EnreachUtils', () => {
 						throw new Error(`Parameter "${name}" not found`);
 					},
 				),
-				evaluateExpression: jest.fn<(...args: unknown[]) => unknown>().mockReturnValue('https://example.com/resume'),
 				helpers: {
 					httpRequest: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(httpResponse),
 				},
@@ -854,6 +732,7 @@ describe('EnreachUtils', () => {
 			const request = mockExec.helpers.httpRequest.mock.calls[0][0];
 			expect(request.headers).toEqual({ 'X-Callback-Auth-Token': 'opaque-token' });
 			expect(request.body.jwt).toBe('opaque-token');
+			expect(request.body).not.toHaveProperty('resumUrl');
 		});
 
 		it('should ignore a non-string callback token', async () => {

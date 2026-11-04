@@ -1,5 +1,4 @@
 import {
-	ICredentialTestRequest,
 	ICredentialType,
 	INodeProperties,
 } from 'n8n-workflow';
@@ -23,15 +22,4 @@ export class EnreachApi implements ICredentialType {
 			placeholder: 'your-jwt-secret-key',
 		},
 	];
-
-	// The JWT secret only validates incoming Enreach webhooks, and no Enreach API
-	// can check it. The test only confirms the Enreach endpoint is reachable. It
-	// sends no credential data, so the secret never leaves the n8n instance.
-	test: ICredentialTestRequest = {
-		request: {
-			baseURL: 'https://n8n.eupcloud.io',
-			url: '/webhook/testcredentials',
-			method: 'GET',
-		},
-	};
 }

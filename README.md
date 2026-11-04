@@ -32,8 +32,13 @@ Webhook trigger for receiving Enreach events.
 Send messages through Enreach UP API.
 
 **Operations:**
-- **Send and Wait** - Send message and wait for response
-- **Send Message** - Send message without waiting
+- **Send Message** - Send a message to the Enreach conversation that started the workflow
+
+> **Breaking change in 2.0.0:** the **Send and Wait** operation was removed. n8n does not allow
+> webhooks on community action nodes, and Send and Wait relied on one to resume the workflow.
+> Send and Wait was the default operation, and n8n does not save a parameter left at its default,
+> so most workflows built with it now **send the message without waiting** for the reply. Those
+> that saved the operation explicitly fail with an error naming the removal. Review these workflows.
 
 **Message Types:**
 - **Text** - Simple text message
@@ -47,12 +52,12 @@ Send messages through Enreach UP API.
 
 Create **Enreach UP API** credentials with your JWT secret.
 
-Saving the credentials runs a connection test that only checks that the Enreach test endpoint is reachable. The test does not send or verify the secret: the secret is checked when the first webhook arrives.
+Saving the credentials runs a local test that only checks that the secret is not empty. Nothing is sent over the network: the secret is checked when Enreach calls the trigger with a signed token.
 
 ### 2. Basic Workflow
 
 ```
-[Enreach UP Trigger] → [Enreach UP: Send and Wait] → [Your Logic]
+[Enreach UP Trigger] → [Your Logic] → [Enreach UP: Send Message]
 ```
 
 ### 3. Example: Send List
@@ -86,7 +91,6 @@ Saving the credentials runs a connection test that only checks that the Enreach 
 ## Features
 
 - **Auto-detection** of JWT and callback URL from trigger node
-- **Timeout configuration** for wait operations
 - **Manual or JSON** options input
 - **Error handling** with continue on fail option
 

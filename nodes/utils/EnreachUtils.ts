@@ -7,7 +7,7 @@ import {
     NodeOperationError,
 } from 'n8n-workflow';
 import { validateWebhookAuth } from './webhookAuth';
-import { ENREACH_LIMITS, TIMEOUT_CONFIG, TIME_UNITS, MESSAGE_TYPES } from './constants';
+import { ENREACH_LIMITS, MESSAGE_TYPES } from './constants';
 import { EnreachErrorCode, createUserFriendlyError } from './errors';
 
 export interface EnreachOption {
@@ -23,60 +23,9 @@ export interface ManualOptions {
 export interface EnreachMessageBody {
     type: string;
     jwt?: string;
-    resumUrl?: string;
     text: string;
     options?: EnreachOption[];
     buttonTitle?: string;
-}
-
-export interface EnreachSentData extends IDataObject {
-    sentRequest: {
-        resource: string;
-        operation: string;
-        type: string;
-        callbackUrl: string;
-        body: EnreachMessageBody;
-    };
-    sendResponse: IDataObject;
-    status: string;
-    message: string;
-    resumUrl?: string;
-    webhookResponse?: IDataObject;
-}
-
-/**
- * Calculate timeout date based on limit configuration
- */
-export function calculateTimeout(
-    limitWaitTime: boolean,
-    limitType: string,
-    dateTime: string,
-    amount: number,
-    unit: string
-): Date | undefined {
-    if (!limitWaitTime) {
-        return undefined;
-    }
-
-    if (limitType === 'dateTime') {
-        const date = new Date(dateTime);
-        if (isNaN(date.getTime())) {
-            throw new Error(`Invalid date/time value: "${dateTime}". Please provide a valid date.`);
-        }
-        return date;
-    }
-
-    // timeInterval - Calculate using milliseconds for accuracy
-    const now = Date.now();
-    let additionalMs = 0;
-
-    const unitMultiplier = TIME_UNITS[unit as keyof typeof TIME_UNITS];
-    if (!unitMultiplier) {
-        throw new Error(`Unknown time unit: "${unit}". Valid units: ${Object.keys(TIME_UNITS).join(', ')}`);
-    }
-    additionalMs = amount * unitMultiplier;
-
-    return new Date(now + additionalMs);
 }
 
 /**
@@ -212,7 +161,6 @@ export function buildMessageBody(
     text: string,
     parsedOptions: EnreachOption[],
     buttonTitle?: string,
-    resumUrl?: string
 ): EnreachMessageBody {
     const messageBody: EnreachMessageBody = {
         type,
@@ -227,12 +175,6 @@ export function buildMessageBody(
     // Add JWT if provided (not empty)
     if (jwt) {
         messageBody.jwt = jwt;
-    }
-
-    // Add resumUrl if provided (for sendAndWait)
-    // Note: Enreach API uses 'resumUrl' (without 'e')
-    if (resumUrl) {
-        messageBody.resumUrl = resumUrl;
     }
 
     // Add buttonTitle only for list type
@@ -300,7 +242,6 @@ function extractAndParseOptions(
 function extractMessageParameters(
     executeFunctions: IExecuteFunctions,
     itemIndex: number,
-    operation: 'sendAndWait' | 'sendMessage'
 ): {
     type: string;
     text: string;
@@ -308,7 +249,6 @@ function extractMessageParameters(
     callbackUrl: string;
     parsedOptions: EnreachOption[];
     buttonTitle?: string;
-    resumUrl?: string;
 } {
     const type = executeFunctions.getNodeParameter('type', itemIndex) as string;
     const text = executeFunctions.getNodeParameter('text', itemIndex) as string;
@@ -316,7 +256,6 @@ function extractMessageParameters(
     let callbackUrl: string = '';
     let jwt: string = '';
 
-    // triggerNodeName is now shown for all operations
     const triggerNodeName = executeFunctions.getNodeParameter('triggerNodeName', itemIndex, 'Enreach Trigger') as string;
 
     try {
@@ -345,143 +284,32 @@ function extractMessageParameters(
 
     validateMessageParameters(type, text, buttonTitle, parsedOptions, executeFunctions, itemIndex);
 
-    const resumUrl = operation === 'sendAndWait'
-        ? executeFunctions.evaluateExpression('{{ $execution.resumeUrl }}', itemIndex) as string
-        : undefined;
-
-    return { type, text, jwt, callbackUrl, parsedOptions, buttonTitle, resumUrl };
+    return { type, text, jwt, callbackUrl, parsedOptions, buttonTitle };
 }
 
 /**
- * Process and send message with response formatting
+ * Send a message to the Enreach callback URL provided by the Enreach Trigger
  */
-async function processMessageCommon(
+export async function processSendMessage(
     executeFunctions: IExecuteFunctions,
-    itemIndex: number,
-    operation: 'sendAndWait' | 'sendMessage'
-): Promise<{ sentData: EnreachSentData; messageBody: EnreachMessageBody }> {
-    // Extract and validate all parameters
-    const params = extractMessageParameters(executeFunctions, itemIndex, operation);
+    itemIndex: number
+): Promise<INodeExecutionData> {
+    const params = extractMessageParameters(executeFunctions, itemIndex);
 
-    // Build message body
     const messageBody = buildMessageBody(
         params.type,
         params.jwt,
         params.text,
         params.parsedOptions,
         params.buttonTitle,
-        params.resumUrl
     );
 
-    // Send message
-    const httpResponse = await sendEnreachMessage(
-        executeFunctions,
-        params.callbackUrl,
-        messageBody,
-    );
+    await sendEnreachMessage(executeFunctions, params.callbackUrl, messageBody);
 
-    // Format response - omit JWT from stored data for security
-    const sanitizedBody: EnreachMessageBody = { ...messageBody };
-    delete sanitizedBody.jwt;
-
-    const sentData: EnreachSentData = {
-        sentRequest: {
-            resource: 'message',
-            operation,
-            type: params.type,
-            callbackUrl: params.callbackUrl,
-            body: sanitizedBody,
-        },
-        sendResponse: httpResponse as IDataObject,
-    } as EnreachSentData;
-
-    if (operation === 'sendAndWait') {
-        sentData.status = 'sent_waiting_for_response';
-        sentData.message = 'Message sent successfully. Waiting for webhook response...';
-        sentData.resumUrl = params.resumUrl;
-    } else {
-        sentData.status = 'sent';
-        sentData.message = 'Message sent successfully';
-    }
-
-    return { sentData, messageBody };
-}
-
-/**
- * Process message send and wait operation.
- * On first run: sends the message and calls putExecutionToWait().
- * On resume (webhook fires): returns the webhook response data.
- */
-export async function processSendAndWait(
-    executeFunctions: IExecuteFunctions,
-    itemIndex: number
-): Promise<INodeExecutionData> {
-    // Send message to Enreach, then wait for webhook resume
-    const { sentData } = await processMessageCommon(
-        executeFunctions,
-        itemIndex,
-        'sendAndWait'
-    );
-
-    // Configure wait timeout
-    const limitWaitTime = executeFunctions.getNodeParameter('limitWaitTime', itemIndex) as boolean;
-    let waitTimeout: Date | undefined;
-
-    if (limitWaitTime) {
-        const limitType = executeFunctions.getNodeParameter('limitType', itemIndex) as string;
-        const dateTime = executeFunctions.getNodeParameter('dateTime', itemIndex, '') as string;
-        const amount = executeFunctions.getNodeParameter('amount', itemIndex, 1) as number;
-        const unit = executeFunctions.getNodeParameter('unit', itemIndex, 'hours') as string;
-
-        waitTimeout = calculateTimeout(limitWaitTime, limitType, dateTime, amount, unit);
-    }
-
-    // Handle timeout configuration
-    let finalTimeout: Date;
-
-    if (limitWaitTime && waitTimeout) {
-        const adjustedTime = waitTimeout.getTime() - TIMEOUT_CONFIG.PROCESSING_BUFFER_MS;
-        finalTimeout = new Date(Math.max(adjustedTime, Date.now() + TIMEOUT_CONFIG.MIN_TIMEOUT_MS));
-    } else {
-        // No timeout limit - wait up to 1 year for webhook response
-        finalTimeout = new Date(Date.now() + TIMEOUT_CONFIG.DEFAULT_WAIT_YEARS * 365 * TIME_UNITS.days);
-    }
-
-    await executeFunctions.putExecutionToWait(finalTimeout);
-
-    // After putExecutionToWait resolves (on webhook resume), capture webhook data
-    const webhookData = executeFunctions.getInputData();
-    if (webhookData && webhookData.length > 0) {
-        sentData.webhookResponse = webhookData[0].json;
-        sentData.status = 'response_received';
-        sentData.message = 'Webhook response received successfully';
-    }
-
-    return {
-        json: sentData,
-        pairedItem: { item: itemIndex },
-    };
-}
-
-/**
- * Process message send operation (without waiting)
- */
-export async function processSendMessage(
-    executeFunctions: IExecuteFunctions,
-    itemIndex: number
-): Promise<INodeExecutionData> {
-    // Process common logic
-    const { sentData, messageBody } = await processMessageCommon(
-        executeFunctions,
-        itemIndex,
-        'sendMessage'
-    );
-
-    // Return simplified output for sendMessage
     return {
         json: {
-            status: sentData.status,
-            message: sentData.message,
+            status: 'sent',
+            message: 'Message sent successfully',
             type: messageBody.type,
             text: messageBody.text,
         },

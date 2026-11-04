@@ -1,21 +1,13 @@
 import {
     IExecuteFunctions,
-    IHookFunctions,
-    IWebhookFunctions,
     INodeType,
     INodeTypeDescription,
     INodeExecutionData,
-    IWebhookResponseData,
-    ApplicationError,
     NodeConnectionTypes,
     NodeOperationError,
 } from 'n8n-workflow';
 
-import {
-    processSendAndWait,
-    processSendMessage,
-    handleWebhook,
-} from '../utils/EnreachUtils';
+import { processSendMessage } from '../utils/EnreachUtils';
 
 export class Enreach implements INodeType {
     description: INodeTypeDescription = {
@@ -33,29 +25,6 @@ export class Enreach implements INodeType {
         inputs: [NodeConnectionTypes.Main],
         outputs: [NodeConnectionTypes.Main],
         usableAsTool: true,
-        credentials: [
-            {
-                name: 'enreachApi',
-                required: false,
-                displayOptions: {
-                    show: {
-                        operation: ['sendAndWait'],
-                        authMethod: ['jwtAuth'],
-                    },
-                },
-            },
-        ],
-        webhooks: [
-            {
-                name: 'default',
-                httpMethod: 'POST',
-                responseMode: 'onReceived',
-                responseData: '',
-                path: '',
-                restartWebhook: true,
-                isFullPath: true,
-            },
-        ],
         properties: [
             // Operation selector - primary control
             {
@@ -65,57 +34,24 @@ export class Enreach implements INodeType {
                 noDataExpression: true,
                 options: [
                     {
-                        name: 'Send and Wait',
-                        value: 'sendAndWait',
-                        description: 'Send a message and wait for response',
-                        action: 'Send message and wait for response',
-                    },
-                    {
                         name: 'Send Message',
                         value: 'sendMessage',
-                        description: 'Send a message without waiting for response',
+                        description: 'Send a message to the Enreach conversation',
                         action: 'Send message',
                     },
                 ],
-                default: 'sendAndWait',
-                required: true,
-            },
-            // Authentication - shown after operation selection
-            {
-                displayName: 'Authentication',
-                name: 'authMethod',
-                type: 'options',
-                noDataExpression: true,
-                displayOptions: {
-                    show: {
-                        operation: ['sendAndWait'],
-                    },
-                },
-                options: [
-                    {
-                        name: 'None',
-                        value: 'none',
-                        description: 'Accept all webhook requests without authentication',
-                    },
-                    {
-                        name: 'JWT Auth',
-                        value: 'jwtAuth',
-                        description: 'Validate the JWT from the Authorization: Bearer header with the configured secret',
-                    },
-                ],
-                default: 'jwtAuth',
-                description: 'Choose how to authenticate incoming webhook requests',
+                default: 'sendMessage',
                 required: true,
             },
 
-            // Trigger Node Name -- shown for all operations that need callbackUrl
+            // Trigger Node Name -- provides the callback URL and callback token
             {
                 displayName: 'Trigger Node Name',
                 name: 'triggerNodeName',
                 type: 'string',
                 displayOptions: {
                     show: {
-                        operation: ['sendAndWait', 'sendMessage'],
+                        operation: ['sendMessage'],
                     },
                 },
                 default: 'Enreach Trigger',
@@ -131,7 +67,7 @@ export class Enreach implements INodeType {
                 type: 'options',
                 displayOptions: {
                     show: {
-                        operation: ['sendAndWait', 'sendMessage'],
+                        operation: ['sendMessage'],
                     },
                 },
                 options: [
@@ -168,7 +104,7 @@ export class Enreach implements INodeType {
                 default: '={{ $($parameter.triggerNodeName).item.json.jwt }}',
                 displayOptions: {
                     show: {
-                        operation: ['sendAndWait', 'sendMessage'],
+                        operation: ['sendMessage'],
                     },
                 },
             },
@@ -179,7 +115,7 @@ export class Enreach implements INodeType {
                 default: '={{ $($parameter.triggerNodeName).item.json.callbackUrl }}',
                 displayOptions: {
                     show: {
-                        operation: ['sendAndWait', 'sendMessage'],
+                        operation: ['sendMessage'],
                     },
                 },
             },
@@ -191,7 +127,7 @@ export class Enreach implements INodeType {
                 type: 'string',
                 displayOptions: {
                     show: {
-                        operation: ['sendAndWait', 'sendMessage'],
+                        operation: ['sendMessage'],
                         type: ['list'],
                     },
                 },
@@ -209,7 +145,7 @@ export class Enreach implements INodeType {
                 type: 'string',
                 displayOptions: {
                     show: {
-                        operation: ['sendAndWait', 'sendMessage'],
+                        operation: ['sendMessage'],
                     },
                 },
                 typeOptions: {
@@ -230,7 +166,7 @@ export class Enreach implements INodeType {
                 type: 'options',
                 displayOptions: {
                     show: {
-                        operation: ['sendAndWait', 'sendMessage'],
+                        operation: ['sendMessage'],
                         type: ['list', 'button'],
                     },
                 },
@@ -257,7 +193,7 @@ export class Enreach implements INodeType {
                 type: 'json',
                 displayOptions: {
                     show: {
-                        operation: ['sendAndWait', 'sendMessage'],
+                        operation: ['sendMessage'],
                         optionsInputMode: ['json'],
                         type: ['list', 'button'],
                     },
@@ -278,7 +214,7 @@ export class Enreach implements INodeType {
                 },
                 displayOptions: {
                     show: {
-                        operation: ['sendAndWait', 'sendMessage'],
+                        operation: ['sendMessage'],
                         optionsInputMode: ['manual'],
                         type: ['list'],
                     },
@@ -336,7 +272,7 @@ export class Enreach implements INodeType {
                 },
                 displayOptions: {
                     show: {
-                        operation: ['sendAndWait', 'sendMessage'],
+                        operation: ['sendMessage'],
                         optionsInputMode: ['manual'],
                         type: ['button'],
                     },
@@ -378,167 +314,30 @@ export class Enreach implements INodeType {
                     },
                 ],
             },
-
-            // Wait Configuration
-            {
-                displayName: 'Limit Wait Time',
-                name: 'limitWaitTime',
-                type: 'boolean',
-                displayOptions: {
-                    show: {
-                        operation: ['sendAndWait'],
-                    },
-                },
-                default: false,
-                description: 'Whether to limit the time that the workflow will wait for a response',
-            },
-            {
-                displayName: 'Wait Time Type',
-                name: 'limitType',
-                type: 'options',
-                displayOptions: {
-                    show: {
-                        operation: ['sendAndWait'],
-                        limitWaitTime: [true],
-                    },
-                },
-                options: [
-                    {
-                        name: 'Time Interval',
-                        value: 'timeInterval',
-                        description: 'Wait for a specific amount of time',
-                    },
-                    {
-                        name: 'Specific Date/Time',
-                        value: 'dateTime',
-                        description: 'Wait until a specific date and time',
-                    },
-                ],
-                default: 'timeInterval',
-            },
-            {
-                displayName: 'Amount',
-                name: 'amount',
-                type: 'number',
-                displayOptions: {
-                    show: {
-                        operation: ['sendAndWait'],
-                        limitWaitTime: [true],
-                        limitType: ['timeInterval'],
-                    },
-                },
-                typeOptions: {
-                    minValue: 1,
-                },
-                default: 1,
-                description: 'The amount of time to wait',
-            },
-            {
-                displayName: 'Unit',
-                name: 'unit',
-                type: 'options',
-                displayOptions: {
-                    show: {
-                        operation: ['sendAndWait'],
-                        limitWaitTime: [true],
-                        limitType: ['timeInterval'],
-                    },
-                },
-                options: [
-                    {
-                        name: 'Seconds',
-                        value: 'seconds',
-                    },
-                    {
-                        name: 'Minutes',
-                        value: 'minutes',
-                    },
-                    {
-                        name: 'Hours',
-                        value: 'hours',
-                    },
-                    {
-                        name: 'Days',
-                        value: 'days',
-                    },
-                ],
-                default: 'hours',
-                description: 'The unit of the amount to wait',
-            },
-            {
-                displayName: 'Date/Time',
-                name: 'dateTime',
-                type: 'dateTime',
-                displayOptions: {
-                    show: {
-                        operation: ['sendAndWait'],
-                        limitWaitTime: [true],
-                        limitType: ['dateTime'],
-                    },
-                },
-                default: '',
-                description: 'The date and time to wait until',
-            },
         ],
     };
-
-    // The webhook is the Send and Wait resume URL (restartWebhook), served by the
-    // execution itself. There is nothing to register on the Enreach side, so the
-    // lifecycle hooks are intentionally no-ops.
-    webhookMethods = {
-        default: {
-            async checkExists(this: IHookFunctions): Promise<boolean> {
-                return true;
-            },
-            async create(this: IHookFunctions): Promise<boolean> {
-                return true;
-            },
-            async delete(this: IHookFunctions): Promise<boolean> {
-                return true;
-            },
-        },
-    };
-
-    async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
-        // Get auth method from node parameters -- fail-closed: default to jwtAuth
-        let authMethod: string;
-        try {
-            authMethod = this.getNodeParameter('authMethod') as string;
-        } catch {
-            // Fail-closed: require auth when parameter cannot be determined
-            authMethod = 'jwtAuth';
-        }
-        return handleWebhook(this, authMethod);
-    }
 
     async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
         const items = this.getInputData();
         const operation = this.getNodeParameter('operation', 0) as string;
 
-        // ARCH-01: sendAndWait suspends the entire execution via putExecutionToWait(),
-        // so only the first item would ever be processed. Reject multi-item input early.
-        if (operation === 'sendAndWait' && items.length > 1) {
-            throw new ApplicationError(
-                'Send and Wait operation only supports a single input item. ' +
-                'Use a "Limit" node or "Split In Batches" to process one item at a time.',
-            );
-        }
-
         const returnData: INodeExecutionData[] = [];
 
         for (let i = 0; i < items.length; i++) {
             try {
-                let result: INodeExecutionData;
-
                 if (operation === 'sendAndWait') {
-                    result = await processSendAndWait(this, i);
-                } else if (operation === 'sendMessage') {
-                    result = await processSendMessage(this, i);
-                } else {
+                    // Removed in 2.0.0: community action nodes cannot declare webhooks
+                    throw new NodeOperationError(
+                        this.getNode(),
+                        'The "Send and Wait" operation was removed in version 2.0.0. Use "Send Message" instead.',
+                        { itemIndex: i },
+                    );
+                }
+                if (operation !== 'sendMessage') {
                     throw new NodeOperationError(this.getNode(), `The operation "${operation}" is not supported`);
                 }
 
-                returnData.push(result);
+                returnData.push(await processSendMessage(this, i));
             } catch (error) {
                 if (this.continueOnFail()) {
                     returnData.push({

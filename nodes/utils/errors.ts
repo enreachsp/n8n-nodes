@@ -12,8 +12,6 @@ export enum EnreachErrorCode {
 	VALIDATION_OPTION_ID_TOO_LONG = 'VALIDATION_OPTION_ID_TOO_LONG',
 	VALIDATION_OPTION_TITLE_TOO_LONG = 'VALIDATION_OPTION_TITLE_TOO_LONG',
 	VALIDATION_INVALID_JSON = 'VALIDATION_INVALID_JSON',
-	VALIDATION_INVALID_DATETIME = 'VALIDATION_INVALID_DATETIME',
-	VALIDATION_INVALID_TIME_UNIT = 'VALIDATION_INVALID_TIME_UNIT',
 }
 
 export class EnreachNodeError extends NodeOperationError {
@@ -48,8 +46,6 @@ function getErrorDescription(code: EnreachErrorCode): string {
 		[EnreachErrorCode.VALIDATION_OPTION_ID_TOO_LONG]: 'Option ID exceeds the maximum allowed length of 256 characters.',
 		[EnreachErrorCode.VALIDATION_OPTION_TITLE_TOO_LONG]: 'Option title exceeds the maximum allowed length of 20 characters for button type.',
 		[EnreachErrorCode.VALIDATION_INVALID_JSON]: 'The provided JSON is not valid. Please provide a valid JSON array.',
-		[EnreachErrorCode.VALIDATION_INVALID_DATETIME]: 'The provided date/time value is not valid.',
-		[EnreachErrorCode.VALIDATION_INVALID_TIME_UNIT]: 'The provided time unit is not valid. Use seconds, minutes, hours, or days.',
 	};
 
 	return descriptions[code] || 'An unknown error occurred.';
@@ -88,12 +84,6 @@ export function createUserFriendlyError(
 
 		[EnreachErrorCode.VALIDATION_INVALID_JSON]: (d) =>
 			`Failed to parse options JSON: ${d.error}. Please provide a valid JSON array.`,
-
-		[EnreachErrorCode.VALIDATION_INVALID_DATETIME]: (d) =>
-			`Invalid date/time value: "${d.value}". Please provide a valid date.`,
-
-		[EnreachErrorCode.VALIDATION_INVALID_TIME_UNIT]: (d) =>
-			`Unknown time unit: "${d.unit}". Valid units: ${d.validUnits}.`,
 	};
 
 	const messageGenerator = messages[code];
