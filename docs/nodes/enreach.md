@@ -4,28 +4,22 @@ Send WhatsApp messages through the Istra proxy API.
 
 ## Operations
 
-### Send and Wait
-Send a message and pause workflow until user responds.
-
-**Use for:** Questionnaires, interactive conversations, collecting responses
-
-**Configuration:**
-- **Authentication:** JWT Auth or None
-- **Trigger Node Name:** Name of Enreach Trigger node (default: "Enreach Trigger")
-- **Type:** Text, Button, List, or Annotation
-- **Text:** Message content
-- **Options:** Buttons or list items (for Button/List types)
-- **Limit Wait Time:** Optional timeout configuration
-
 ### Send Message
-Send a message and continue immediately (no waiting).
+Send a message to the conversation that started the workflow and continue immediately.
 
-**Use for:** Notifications, confirmations, one-way messages
+**Use for:** Notifications, confirmations, questions, agent annotations
 
 **Configuration:**
+- **Trigger Node Name:** Name of the Enreach Trigger node that provides the callback URL and callback token (default: "Enreach Trigger")
 - **Type:** Text, Button, List, or Annotation
 - **Text:** Message content
 - **Options:** Buttons or list items (for Button/List types)
+
+### Send and Wait (removed in 2.0.0)
+n8n does not allow webhooks on community action nodes, and Send and Wait used one to resume the
+paused workflow. Send and Wait was the default operation and n8n does not save a parameter left at
+its default, so most workflows built with it now send the message without waiting for the reply.
+Workflows that saved the operation explicitly fail with an error naming the removal.
 
 ## Message Types
 

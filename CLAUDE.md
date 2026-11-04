@@ -38,28 +38,27 @@ Publishing to npm happens only in GitHub Actions (`.github/workflows/publish.yml
 ## Architecture
 
 ### Node Structure
-- `nodes/Enreach/Enreach.node.ts` - Main action node with "Send and Wait" and "Send Message" operations. Has `usableAsTool: true` for n8n AI agent integration.
+- `nodes/Enreach/Enreach.node.ts` - Main action node with the "Send Message" operation. Has `usableAsTool: true` for n8n AI agent integration. "Send and Wait" was removed in 2.0.0: community action nodes may not declare webhooks, so the node has none. It was the default `operation` and n8n does not save default values, so most old Send and Wait workflows now run Send Message; only an explicitly saved `sendAndWait` hits the "removed in 2.0.0" error.
 - `nodes/EnreachTrigger/EnreachTrigger.node.ts` - Webhook trigger node (version 2) that receives Enreach events via POST.
-- `credentials/EnreachApi.credentials.ts` - JWT secret credential configuration (HMAC-SHA256).
+- `credentials/EnreachApi.credentials.ts` - JWT secret credential configuration (HMAC-SHA256), used by the Enreach Trigger only.
 
 ### Utilities (`nodes/utils/`)
-- `EnreachUtils.ts` - Core message processing: `processSendAndWait()`, `processSendMessage()`, `handleWebhook()`, message body building, validation
+- `EnreachUtils.ts` - Core message processing: `processSendMessage()`, `handleWebhook()`, message body building, validation
 - `JwtValidator.ts` - JWT token validation with HMAC-SHA256 signature verification
-- `webhookAuth.ts` - Shared webhook authentication logic used by both Trigger and main node
-- `constants.ts` - Message limits, timeout configs, message types
+- `webhookAuth.ts` - Webhook authentication logic used by the Trigger
+- `constants.ts` - Message limits, message types
+- `credentialTest.ts` - `enreachCredentialTest`, the Trigger's `testedBy` credential test (secret not empty, no network call)
 - `errors.ts` - `EnreachNodeError` class extending `NodeOperationError` with error codes and user-friendly messages
 
 ### Key Patterns
 - Enreach node auto-detects JWT and callback URL from connected trigger node via hidden fields with expression: `$($parameter.triggerNodeName).item.json`
-- "Send and Wait" uses `putExecutionToWait()` for async webhook response handling, with `$execution.resumeUrl` as the callback
-- The Enreach API uses `resumUrl` (without 'e') - this is intentional, not a typo
 - Both JSON and manual mapping modes for button/list options. Manual mode uses `optionsManual` (list) and `optionsManualButton` (button) as separate fixedCollection parameters
 - Validation enforces limits: 1024 chars text, 20 chars button title, 256 chars option ID, 3-10 list options
 
 ### JWT transport
 - **Incoming webhooks**: Enreach authenticates with `Authorization: Bearer <JWT>` (scheme case-insensitive), validated with the credential secret (HS256, `exp` checked only when present). See `extractBearerToken()` in `EnreachUtils.ts`. Auth failures are written as a real HTTP 401 via `getResponseObject()` + `noWebhookResponse: true` (a `webhookResponse` would go out as 200).
 - **Callback token**: `X-Callback-Auth-Token` header, falling back to `bodyData.jwt`. It is signed with an Enreach platform key, so it must never be validated; it is only present when n8n has to call Enreach back. It is exposed on the workflow output as `json.jwt` (see `extractCallbackToken()`).
-- **Outgoing requests** to `callbackUrl` (Send and Wait and Send Message, whatever the auth method): the callback token is sent both as the `X-Callback-Auth-Token` header and inside the body (`messageBody.jwt`) — the body mirror is kept for backward compatibility during Enreach platform migration.
+- **Outgoing requests** to `callbackUrl` (Send Message): the callback token is sent both as the `X-Callback-Auth-Token` header and inside the body (`messageBody.jwt`) — the body mirror is kept for backward compatibility during Enreach platform migration.
 
 ### Build Process
 `n8n-node build` compiles TypeScript to `dist/` and copies static files (SVG/PNG icons) keeping the folder structure. Icons have a light and a dark variant (`enreach.svg`, `enreach.dark.svg`).
@@ -76,8 +75,8 @@ Tests are in `tests/utils/` and `tests/credentials/` using Jest with ts-jest. Th
 - No runtime `dependencies`. Imports limited to `n8n-workflow`, `crypto` and relative paths.
 - No `process.env` or file system access.
 - Throw `NodeOperationError`/`NodeApiError` inside `catch` blocks, never raw errors.
-- The credential declares `test` (GET `https://n8n.eupcloud.io/webhook/testcredentials`, which always answers 200): the n8n Creator Portal rejects `testedBy` on nodes. The JWT secret has no remote endpoint that can check it, so the test only proves reachability and sends no credential data. n8n picks the credential `test` before any node `testedBy`.
-- The action node declares no-op `webhookMethods`: its webhook is the Send and Wait resume URL (`restartWebhook`), which n8n never registers at activation.
+- The credential declares no HTTP `test`: the n8n reviewer rejected a test that called an external webhook without checking the secret, and no Enreach endpoint can verify it. The Enreach Trigger declares `testedBy: 'enreachCredentialTest'` instead, which `credential-test-required` accepts (the scanner ignores `eslint-disable`). Every node that uses `enreachApi` must keep that `testedBy`.
+- Only trigger nodes may declare `webhooks`/`webhookMethods`/`webhook()` (n8n review, 2026-11).
 - See `docs/n8n-verification-checklist.md` for the full procedure and status.
 
 ## n8n Integration

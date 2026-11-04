@@ -17,14 +17,14 @@ The secret key used by Istra proxy to sign JWT tokens (HMAC SHA-256).
 
 ## Using Credentials
 
-**Enreach Node (Send and Wait):**
-- Operation: Send and Wait
+**Enreach Trigger** (the only node that uses this credential):
 - Authentication: JWT Auth
 - Select credential from dropdown
 
-**Enreach Trigger:**
-- Authentication: JWT Auth
-- Select credential from dropdown
+## Credential Test
+
+The **Test** button only checks that the secret is not empty. No request is sent: no Enreach
+endpoint can verify the secret, which is checked when Enreach calls the trigger with a signed token.
 
 ## Related
 

@@ -78,10 +78,10 @@ The table in section 2 describes commit `43c068f`. State after the work on this 
 | 16 | npm name unpublished on 2025-10-21 | Open. Check republish rights; first release must be above 1.0.2. |
 | 17 | Lockfile | Done: `pnpm-lock.yaml`, `packageManager: pnpm@10.8.1` |
 | 18 | Tests | Done: 6 suites, 146 tests |
-| 20 | Credential test | Done through `testedBy` (local check: secret not empty). To confirm with the scanner. |
+| 20 | Credential test | Done through `testedBy` on the Enreach Trigger (local check: secret not empty). See section 6. |
 | 21 | Themed icons | Done: `enreach.dark.svg` (white fill, default choice, not design-reviewed) |
 | 23 | Errors in `catch` | Done |
-| 24 | `webhook-lifecycle-complete` | Done: no-op `webhookMethods` on the action node. n8n skips `restartWebhook` webhooks at activation (`webhook-trigger-registrar.ts`, `ignoreRestartWebhooks = true`). |
+| 24 | `webhook-lifecycle-complete` | Done: only the Enreach Trigger declares a webhook, with `webhookMethods`. The action node has no webhook since 2.0.0 (section 6). |
 | 27 | Scanner | Open: needs a first published version with provenance |
 | 28 | Duplicate / competing node | Open |
 
@@ -99,3 +99,14 @@ Next exact action: commit, push the branch, open the PR, check that `ci.yml` is 
 - Open: `0.0.0-stage` is on npm without provenance (deprecate it). UX copy gaps (placeholders without "e.g.", "error"/"failed" in messages).
 
 Next exact action: merge the credential test PR, release 1.0.5 (`pnpm release`), check the Publish run and the scanner, resubmit on the Creator Portal.
+
+## 6. n8n review of 1.0.5 (2026-11-04, ICP-21887)
+
+The n8n reviewer raised two HIGH findings:
+
+- **Webhooks on the action node.** The Enreach node declared `webhooks` (`restartWebhook: true`), `webhookMethods` and `webhook()` for Send and Wait. Webhooks are reserved for trigger nodes in community nodes. Fix: Send and Wait is removed; the action node only has Send Message (breaking change, released as 2.0.0). Send and Wait was the default `operation` and n8n does not save default values, so most existing Send and Wait workflows now send without waiting; only an explicitly saved `sendAndWait` fails with the "removed in 2.0.0" error.
+- **Credential test does not test the credential.** The `test` GET on `https://n8n.eupcloud.io/webhook/testcredentials` sent no credential data and started a workflow on a production instance. Fix: the `test` property is removed. Removing it alone fails `@n8n/community-nodes/credential-test-required` both in `pnpm lint` and in the scanner (which lints the GitHub sources with `allowInlineConfig: false`, so an `eslint-disable` is ignored). The rule also accepts `testedBy` on every node that uses the credential, so the Enreach Trigger, now its only user, declares `testedBy: 'enreachCredentialTest'` (`nodes/utils/credentialTest.ts`: secret not empty, no network call).
+
+Risk: the Creator Portal automatic vetting rejected the `testedBy` form in 2026-10 ("Missing credential test", section 5). The resubmission must explain that the reviewer asked to drop the HTTP test and that `testedBy` is the only form the lint rule accepts for a secret no endpoint can verify.
+
+Next exact action: merge, `pnpm release` 2.0.0 from `main`, check the Publish run and the scanner, reply to the reviewer and resubmit on the Creator Portal.
